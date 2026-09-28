@@ -14,8 +14,10 @@ Files
 Core Engine\dvsa_appointment_setter\  Main Python package.
 Core Engine\config.example.json       Example settings file.
 Core Engine\requirements.txt          Python dependency list.
-Core Engine\run.bat                   Quick Windows launcher.
-Core Engine\start_ui.bat              Local browser UI launcher.
+Launcher.bat                          Main root launcher.
+Core Engine\run.bat                   Command-line helper launcher.
+Core Engine\start_ui.bat              Engine-level UI helper launcher.
+Core Engine\review_3x.bat             Runs the three-pass project review.
 Logs\development log.md               Build notes.
 Logs\process Log.md                   Runtime/process notes.
 
@@ -83,6 +85,13 @@ Useful settings:
 
 Run
 ---
+Main launcher:
+
+   Launcher.bat
+
+This is kept in the Software root folder as the designated launcher.
+It also checks that the instruction file exists before starting the UI.
+
 Pleasant UI:
 
    Core Engine\start_ui.bat
@@ -134,6 +143,22 @@ Runtime activity is written to:
 Development notes are kept in:
 
    Logs\development log.md
+
+Development routine
+-------------------
+Before development work starts, check:
+
+   ..\Instructions\instructions.md
+
+After finishing a change, run three review passes: test, look for one practical improvement, apply it if useful, and record the pass in the log files.
+
+To run the repeatable three-pass review:
+
+   Core Engine\review_3x.bat
+
+Or from the Core Engine folder:
+
+   python -m dvsa_appointment_setter.self_check --stamp
 
 Troubleshooting
 ---------------

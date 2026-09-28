@@ -745,11 +745,16 @@ class UiRequestHandler(BaseHTTPRequestHandler):
         try:
             ensure_local_config()
             process = launch_assistant()
-            status = "already running" if process is None else "assistant started"
+            already_running = process is None
+            status = "already running" if already_running else "assistant started"
             MarkdownProcessLogger(PROCESS_LOG_PATH).append("ui launch", status)
             self._send_json(
                 {
-                    "message": "Assistant launched in a separate console.",
+                    "message": (
+                        "Assistant is already running."
+                        if already_running
+                        else "Assistant launched in a separate console."
+                    ),
                     "running": assistant_is_running(),
                 }
             )
