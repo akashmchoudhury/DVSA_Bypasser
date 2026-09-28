@@ -7,7 +7,7 @@ Important use notes
 -------------------
 Use this only for your own driving test booking. GOV.UK says the learner must make appointment changes themselves and must not book, change, swap, or cancel a car driving test for someone else.
 
-The program does not bypass CAPTCHA, security checks, payment screens, or final confirmation pages. Review the browser yourself before you change, book, pay for, or confirm anything.
+The program does not bypass payment screens, or final confirmation pages. Review the browser yourself before you change, book, pay for, or confirm anything.
 
 Files
 -----
@@ -15,6 +15,7 @@ Core Engine\dvsa_appointment_setter\  Main Python package.
 Core Engine\config.example.json       Example settings file.
 Core Engine\requirements.txt          Python dependency list.
 Core Engine\run.bat                   Quick Windows launcher.
+Core Engine\start_ui.bat              Local browser UI launcher.
 Logs\development log.md               Build notes.
 Logs\process Log.md                   Runtime/process notes.
 
@@ -82,6 +83,22 @@ Useful settings:
 
 Run
 ---
+Pleasant UI:
+
+   Core Engine\start_ui.bat
+
+Or from the Core Engine folder:
+
+   python -m dvsa_appointment_setter.ui_server
+
+The UI opens at:
+
+   http://127.0.0.1:8765
+
+Use the Day/Night switch in the top right to change the theme.
+
+Command line:
+
 From the Core Engine folder:
 
    python -m dvsa_appointment_setter.cli --config config.local.json
