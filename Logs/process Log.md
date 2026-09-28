@@ -12,3 +12,15 @@
 - 2026-09-28 17:26:12 | review pass 1 | repeatable project checks passed
 - 2026-09-28 17:26:12 | review pass 2 | repeatable project checks passed
 - 2026-09-28 17:26:12 | review pass 3 | repeatable project checks passed
+- 2026-09-28 17:36 | proxy update | I added explicit local proxy and auto rotator list support.
+- 2026-09-28 17:28:59 | review pass 1 | repeatable project checks passed
+- 2026-09-28 17:28:59 | review pass 2 | repeatable project checks passed
+- 2026-09-28 17:28:59 | review pass 3 | repeatable project checks passed
+- 2026-09-28 17:44 | rate limiter update | I changed the monitor from fixed sleeping to a limiter with jitter and error backoff.
+- 2026-09-28 17:31:34 | review pass 1 | repeatable project checks passed
+- 2026-09-28 17:31:34 | review pass 2 | repeatable project checks passed
+- 2026-09-28 17:31:34 | review pass 3 | repeatable project checks passed
+- 2026-09-28 17:52 | rate limit protection | I added detection and cooldown for search-limit and too-many-requests pages.
+- 2026-09-28 17:33:57 | review pass 1 | repeatable project checks passed
+- 2026-09-28 17:33:57 | review pass 2 | repeatable project checks passed
+- 2026-09-28 17:33:57 | review pass 3 | repeatable project checks passed

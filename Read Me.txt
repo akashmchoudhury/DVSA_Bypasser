@@ -69,19 +69,42 @@ Useful settings:
 - search.poll_seconds
   How long to wait between checks. Keep this respectful. The app will not accept less than 60 seconds.
 
+- search.rate_limit_jitter_seconds
+  Adds a small random delay after each check so monitoring does not hit the service on an exact fixed beat.
+
+- search.error_backoff_seconds
+  Extra wait used after a page reload or page text read fails. This must be at least the poll_seconds value.
+
+- search.rate_limit_cooldown_seconds
+  Longer pause used when the visible page says things like search limit reached, too many requests, or try again later.
+
 - proxy.enabled
   Set to true only if you have a proxy you are allowed to use.
 
+- proxy.mode
+  Use "off", "local", "single", "provider_rotating", or "rotating_list".
+
+- proxy.local_server
+  Local proxy address for tools like a local VPN/proxy client, for example:
+  http://127.0.0.1:8080
+
 - proxy.server
-  Put the proxy endpoint here, for example:
+  Put the single proxy or provider-managed rotating endpoint here, for example:
   http://host:port
   socks5://host:port
+
+- proxy.servers
+  Auto rotator list. Add one proxy per line in the UI, or one string per item in JSON.
+  The app selects a proxy from this list each time the assistant launches.
 
 - proxy.username and proxy.password
   Fill these if your proxy provider needs authentication.
 
 - proxy.provider_managed_rotating_endpoint
   Leave this true when your proxy company gives you one endpoint that rotates automatically on their side.
+
+- proxy.rotation_strategy
+  Use "round_robin" to step through the auto rotator list, or "random" to pick randomly.
 
 Run
 ---

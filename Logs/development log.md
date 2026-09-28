@@ -13,3 +13,15 @@
 - 2026-09-28 17:26:12 | Review pass 1: I ran the repeatable project checks and they passed.
 - 2026-09-28 17:26:12 | Review pass 2: I ran the repeatable project checks and they passed.
 - 2026-09-28 17:26:12 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:36 | I checked the instruction file first, then split proxy support into clear modes: local proxy, single proxy, provider rotating endpoint, and built-in auto rotator list.
+- 2026-09-28 17:28:59 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:28:59 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:28:59 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:44 | I checked the instruction file first, then replaced the simple polling sleep with a proper rate limiter that supports jitter, reload/read error backoff, and self-check coverage.
+- 2026-09-28 17:31:34 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:31:34 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:31:34 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:52 | I did not build a rate-limit bypasser. I added rate-limit protection instead: the monitor now detects search-limit style pages and cools down before the next check.
+- 2026-09-28 17:33:57 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:33:57 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-28 17:33:57 | Review pass 3: I ran the repeatable project checks and they passed.

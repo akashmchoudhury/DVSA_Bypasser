@@ -18,6 +18,9 @@
     "preferred_date_from": "",
     "preferred_date_to": "",
     "poll_seconds": 180,
+    "rate_limit_jitter_seconds": 20,
+    "error_backoff_seconds": 300,
+    "rate_limit_cooldown_seconds": 3600,
     "max_checks": 0,
     "refresh_between_checks": true,
     "stop_before_final_confirmation": true,
@@ -25,9 +28,14 @@
   },
   "proxy": {
     "enabled": false,
+    "mode": "off",
     "server": "",
+    "local_server": "http://127.0.0.1:8080",
+    "servers": [],
     "username": "",
     "password": "",
+    "rotation_strategy": "round_robin",
+    "rotation_state_path": ".proxy-rotation-state.json",
     "provider_managed_rotating_endpoint": true
   },
   "browser": {

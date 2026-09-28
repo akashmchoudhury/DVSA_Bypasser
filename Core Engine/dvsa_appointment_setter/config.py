@@ -15,6 +15,8 @@ ALLOWED_SERVICE_HOSTS = {
     "driverpracticaltest.dvsa.gov.uk",
 }
 
+PROXY_MODES = {"off", "local", "single", "provider_rotating", "rotating_list"}
+
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
@@ -42,6 +44,9 @@ def default_config() -> dict[str, Any]:
             "preferred_date_from": "",
             "preferred_date_to": "",
             "poll_seconds": 180,
+            "rate_limit_jitter_seconds": 20,
+            "error_backoff_seconds": 300,
+            "rate_limit_cooldown_seconds": 3600,
             "max_checks": 0,
             "refresh_between_checks": True,
             "stop_before_final_confirmation": True,
@@ -49,9 +54,14 @@ def default_config() -> dict[str, Any]:
         },
         "proxy": {
             "enabled": False,
+            "mode": "off",
             "server": "",
+            "local_server": "http://127.0.0.1:8080",
+            "servers": [],
             "username": "",
             "password": "",
+            "rotation_strategy": "round_robin",
+            "rotation_state_path": ".proxy-rotation-state.json",
             "provider_managed_rotating_endpoint": True,
         },
         "browser": {
@@ -84,6 +94,9 @@ class SearchConfig:
     preferred_date_from: str
     preferred_date_to: str
     poll_seconds: int
+    rate_limit_jitter_seconds: int
+    error_backoff_seconds: int
+    rate_limit_cooldown_seconds: int
     max_checks: int
     refresh_between_checks: bool
     stop_before_final_confirmation: bool
@@ -93,15 +106,23 @@ class SearchConfig:
 @dataclass(frozen=True)
 class ProxyConfig:
     enabled: bool
+    mode: str
     server: str
+    local_server: str
+    servers: list[str]
     username: str
     password: str
+    rotation_strategy: str
+    rotation_state_path: Path
     provider_managed_rotating_endpoint: bool
 
-    def as_playwright_proxy(self) -> dict[str, str] | None:
+    def as_playwright_proxy(self, server: str | None = None) -> dict[str, str] | None:
         if not self.enabled:
             return None
-        proxy = {"server": self.server}
+        selected_server = server or self.server
+        if not selected_server:
+            return None
+        proxy = {"server": selected_server}
         if self.username:
             proxy["username"] = self.username
         if self.password:
@@ -153,6 +174,15 @@ def _require_string_list(value: Any, field_name: str) -> list[str]:
     return output
 
 
+def _normalize_proxy_server(value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    if "://" not in cleaned:
+        return f"http://{cleaned}"
+    return cleaned
+
+
 def validate_start_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname not in ALLOWED_SERVICE_HOSTS:
@@ -180,15 +210,60 @@ def load_config(config_path: str | Path) -> AppConfig:
     if poll_seconds < 60:
         raise ValueError("poll_seconds must be 60 or higher")
 
+    rate_limit_jitter_seconds = int(search.get("rate_limit_jitter_seconds", 0))
+    if rate_limit_jitter_seconds < 0:
+        raise ValueError("rate_limit_jitter_seconds must be 0 or higher")
+
+    error_backoff_seconds = int(search.get("error_backoff_seconds", 300))
+    if error_backoff_seconds < poll_seconds:
+        raise ValueError("error_backoff_seconds must be equal to or higher than poll_seconds")
+
+    rate_limit_cooldown_seconds = int(search.get("rate_limit_cooldown_seconds", 3600))
+    if rate_limit_cooldown_seconds < error_backoff_seconds:
+        raise ValueError(
+            "rate_limit_cooldown_seconds must be equal to or higher than error_backoff_seconds"
+        )
+
     max_checks = int(search["max_checks"])
     if max_checks < 0:
         raise ValueError("max_checks must be 0 or higher")
 
-    if bool(proxy["enabled"]) and not str(proxy["server"]).strip():
-        raise ValueError("proxy.server is required when proxy.enabled is true")
+    proxy_enabled = bool(proxy["enabled"])
+    proxy_mode = str(proxy.get("mode", "")).strip() or (
+        "provider_rotating"
+        if proxy_enabled and bool(proxy.get("provider_managed_rotating_endpoint", False))
+        else "single"
+        if proxy_enabled
+        else "off"
+    )
+    if not proxy_enabled:
+        proxy_mode = "off"
+    if proxy_mode not in PROXY_MODES:
+        raise ValueError(f"proxy.mode must be one of: {', '.join(sorted(PROXY_MODES))}")
+
+    proxy_server = _normalize_proxy_server(str(proxy["server"]))
+    local_proxy_server = _normalize_proxy_server(str(proxy.get("local_server", "")))
+    proxy_servers = [
+        _normalize_proxy_server(item)
+        for item in _require_string_list(proxy.get("servers", []), "proxy.servers")
+    ]
+    rotation_strategy = str(proxy.get("rotation_strategy", "round_robin")).strip()
+    if rotation_strategy not in {"round_robin", "random"}:
+        raise ValueError("proxy.rotation_strategy must be round_robin or random")
+
+    if proxy_enabled:
+        if proxy_mode == "local" and not local_proxy_server:
+            raise ValueError("proxy.local_server is required when proxy.mode is local")
+        if proxy_mode in {"single", "provider_rotating"} and not proxy_server:
+            raise ValueError("proxy.server is required for the selected proxy mode")
+        if proxy_mode == "rotating_list" and not proxy_servers:
+            raise ValueError("proxy.servers needs at least one entry for auto rotator mode")
 
     user_data_dir = _resolve_path(str(browser["user_data_dir"]), path.parent)
     process_log_path = _resolve_path(str(logging["process_log_path"]), path.parent)
+    rotation_state_path = _resolve_path(
+        str(proxy.get("rotation_state_path", ".proxy-rotation-state.json")), path.parent
+    )
 
     return AppConfig(
         candidate=CandidateConfig(
@@ -209,16 +284,24 @@ def load_config(config_path: str | Path) -> AppConfig:
             preferred_date_from=str(search["preferred_date_from"]).strip(),
             preferred_date_to=str(search["preferred_date_to"]).strip(),
             poll_seconds=poll_seconds,
+            rate_limit_jitter_seconds=rate_limit_jitter_seconds,
+            error_backoff_seconds=error_backoff_seconds,
+            rate_limit_cooldown_seconds=rate_limit_cooldown_seconds,
             max_checks=max_checks,
             refresh_between_checks=bool(search["refresh_between_checks"]),
             stop_before_final_confirmation=bool(search["stop_before_final_confirmation"]),
             service_hours_only=bool(search["service_hours_only"]),
         ),
         proxy=ProxyConfig(
-            enabled=bool(proxy["enabled"]),
-            server=str(proxy["server"]).strip(),
+            enabled=proxy_enabled,
+            mode=proxy_mode,
+            server=proxy_server,
+            local_server=local_proxy_server,
+            servers=proxy_servers,
             username=str(proxy["username"]).strip(),
             password=str(proxy["password"]),
+            rotation_strategy=rotation_strategy,
+            rotation_state_path=rotation_state_path,
             provider_managed_rotating_endpoint=bool(
                 proxy["provider_managed_rotating_endpoint"]
             ),

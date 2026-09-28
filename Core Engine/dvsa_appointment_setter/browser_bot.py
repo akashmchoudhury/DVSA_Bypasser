@@ -8,6 +8,24 @@ from zoneinfo import ZoneInfo
 from .config import AppConfig
 from .logger import MarkdownProcessLogger
 from .matcher import AvailabilityMatcher
+from .proxy_manager import select_playwright_proxy
+from .rate_limiter import RateLimiter, format_wait
+
+
+RATE_LIMIT_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"search limit reached",
+        r"too many requests",
+        r"rate limit",
+        r"try again later",
+        r"temporarily blocked",
+        r"temporarily unavailable",
+        r"error\s*15",
+        r"unusual traffic",
+        r"access denied",
+    ]
+]
 
 
 class AppointmentAssistant:
@@ -39,10 +57,10 @@ class AppointmentAssistant:
                 "slow_mo": self.config.browser.slow_mo_ms,
                 "timeout": self.config.browser.navigation_timeout_ms,
             }
-            proxy = self.config.proxy.as_playwright_proxy()
+            proxy, proxy_description = select_playwright_proxy(self.config.proxy)
             if proxy:
                 launch_options["proxy"] = proxy
-                self.logger.append("proxy enabled", "using configured proxy endpoint")
+                self.logger.append("proxy enabled", proxy_description)
 
             context = await playwright.chromium.launch_persistent_context(
                 user_data_dir=str(self.config.browser.user_data_dir),
@@ -113,6 +131,12 @@ class AppointmentAssistant:
     async def _monitor(self, page, once: bool) -> None:
         check_count = 0
         max_checks = 1 if once else self.config.search.max_checks
+        rate_limiter = RateLimiter(
+            poll_seconds=self.config.search.poll_seconds,
+            jitter_seconds=self.config.search.rate_limit_jitter_seconds,
+            error_backoff_seconds=self.config.search.error_backoff_seconds,
+            rate_limit_cooldown_seconds=self.config.search.rate_limit_cooldown_seconds,
+        )
 
         while True:
             if self.config.search.service_hours_only and not self._inside_service_hours():
@@ -123,13 +147,43 @@ class AppointmentAssistant:
                 await asyncio.sleep(self.config.search.poll_seconds)
                 continue
 
+            waited = await rate_limiter.wait_for_slot()
+            if waited > 0:
+                message = f"waited {format_wait(waited)} before the next check"
+                print()
+                print(f"Rate limiter: {message}.")
+                self.logger.append("rate limiter", message)
+
+            if check_count > 0 and self.config.search.refresh_between_checks:
+                try:
+                    await page.reload(wait_until="domcontentloaded")
+                except Exception as exc:
+                    self.logger.append("page reload failed", str(exc))
+                    next_delay = rate_limiter.mark_check_complete(had_error=True)
+                    print()
+                    print(f"Reload failed. Backing off for about {format_wait(next_delay)}.")
+                    continue
+
             check_count += 1
-            text = await self._read_body_text(page)
+            text, read_failed = await self._read_body_text(page)
+            rate_limit_reason = self._detect_rate_limit_text(text)
+            if rate_limit_reason:
+                next_delay = rate_limiter.mark_rate_limited()
+                message = (
+                    f"detected '{rate_limit_reason}', cooling down for about "
+                    f"{format_wait(next_delay)}"
+                )
+                self.logger.append("rate limit protection", message)
+                print()
+                print(f"Rate limit protection: {message}.")
+                continue
+
             result = self.matcher.evaluate(text)
             self.logger.append(
                 "availability check",
                 f"check {check_count}; {result.summary()}",
             )
+            next_delay = rate_limiter.mark_check_complete(had_error=read_failed)
 
             print()
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Check {check_count}: {result.summary()}")
@@ -151,17 +205,14 @@ class AppointmentAssistant:
             if max_checks and check_count >= max_checks:
                 self.logger.append("monitoring stopped", "maximum check count reached")
                 return
+            self.logger.append("rate limiter", f"next check in about {format_wait(next_delay)}")
 
-            await asyncio.sleep(self.config.search.poll_seconds)
-            if self.config.search.refresh_between_checks:
-                await page.reload(wait_until="domcontentloaded")
-
-    async def _read_body_text(self, page) -> str:
+    async def _read_body_text(self, page) -> tuple[str, bool]:
         try:
-            return await page.locator("body").inner_text(timeout=15000)
+            return await page.locator("body").inner_text(timeout=15000), False
         except Exception as exc:
             self.logger.append("page text read failed", str(exc))
-            return ""
+            return "", True
 
     def _alert_user(self) -> None:
         print("\a", end="")
@@ -172,6 +223,13 @@ class AppointmentAssistant:
             winsound.Beep(1500, 400)
         except Exception:
             return
+
+    def _detect_rate_limit_text(self, page_text: str) -> str:
+        for pattern in RATE_LIMIT_PATTERNS:
+            match = pattern.search(page_text)
+            if match:
+                return match.group(0)
+        return ""
 
     def _inside_service_hours(self) -> bool:
         uk_now = datetime.now(ZoneInfo("Europe/London"))

@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import CORE_ROOT, SOFTWARE_ROOT, load_config
 from .logger import MarkdownProcessLogger
 from .matcher import AvailabilityMatcher
+from .rate_limiter import RateLimiter
 from .ui_server import HTML
 
 
@@ -34,6 +35,7 @@ def run_three_pass_review() -> int:
         check_python_sources,
         check_config_loading,
         check_matcher,
+        check_rate_limiter,
         check_ui_markup,
     ]
 
@@ -107,6 +109,33 @@ def check_matcher(_: str) -> None:
         raise CheckFailed("matcher did not find the sample appointment text")
 
 
+def check_rate_limiter(_: str) -> None:
+    now = [100.0]
+    limiter = RateLimiter(
+        poll_seconds=60,
+        jitter_seconds=0,
+        error_backoff_seconds=300,
+        rate_limit_cooldown_seconds=900,
+        clock=lambda: now[0],
+    )
+    if limiter.seconds_until_next_slot() != 0:
+        raise CheckFailed("rate limiter should allow the first check immediately")
+    next_delay = limiter.mark_check_complete(had_error=False)
+    if next_delay != 60:
+        raise CheckFailed("rate limiter did not schedule the normal delay")
+    if int(limiter.seconds_until_next_slot()) != 60:
+        raise CheckFailed("rate limiter did not hold the next slot")
+    now[0] += 61
+    if limiter.seconds_until_next_slot() != 0:
+        raise CheckFailed("rate limiter did not release after the delay")
+    error_delay = limiter.mark_check_complete(had_error=True)
+    if error_delay != 300:
+        raise CheckFailed("rate limiter did not apply error backoff")
+    cooldown_delay = limiter.mark_rate_limited()
+    if cooldown_delay != 900:
+        raise CheckFailed("rate limiter did not apply the rate-limit cooldown")
+
+
 def check_ui_markup(_: str) -> None:
     required_bits = [
         "DVSA Appointment Setter",
@@ -114,6 +143,11 @@ def check_ui_markup(_: str) -> None:
         "Day",
         "Launch Assistant",
         "Proxy enabled",
+        "Local proxy",
+        "Auto rotator list",
+        "Jitter seconds",
+        "Error backoff seconds",
+        "Rate limit cooldown seconds",
         "--coffee",
         "--bg",
     ]

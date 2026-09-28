@@ -426,6 +426,21 @@ HTML = """<!doctype html>
               <input id="pollSeconds" type="number" min="60" step="5">
             </label>
 
+            <label>Jitter seconds
+              <input id="jitterSeconds" type="number" min="0" step="5">
+              <span class="hint">Adds a small random delay after each check</span>
+            </label>
+
+            <label>Error backoff seconds
+              <input id="errorBackoffSeconds" type="number" min="60" step="30">
+              <span class="hint">Used after reload or page-read errors</span>
+            </label>
+
+            <label>Rate limit cooldown seconds
+              <input id="rateLimitCooldownSeconds" type="number" min="300" step="60">
+              <span class="hint">Used when a search-limit or too-many-requests page is detected</span>
+            </label>
+
             <label>Maximum checks
               <input id="maxChecks" type="number" min="0" step="1">
             </label>
@@ -442,8 +457,23 @@ HTML = """<!doctype html>
               <input id="theoryNumber" autocomplete="off">
             </label>
 
+            <label>Proxy mode
+              <select id="proxyMode">
+                <option value="off">Off</option>
+                <option value="local">Local proxy</option>
+                <option value="single">Single proxy</option>
+                <option value="provider_rotating">Provider rotating endpoint</option>
+                <option value="rotating_list">Auto rotator list</option>
+              </select>
+            </label>
+
+            <label>Local proxy server
+              <input id="localProxyServer" placeholder="http://127.0.0.1:8080" autocomplete="off">
+            </label>
+
             <label>Proxy server
               <input id="proxyServer" placeholder="http://host:port" autocomplete="off">
+              <span class="hint">Used by single proxy or provider rotating endpoint</span>
             </label>
 
             <label>Proxy username
@@ -454,9 +484,21 @@ HTML = """<!doctype html>
               <input id="proxyPassword" type="password" autocomplete="off">
             </label>
 
+            <label>Rotation strategy
+              <select id="rotationStrategy">
+                <option value="round_robin">Round robin</option>
+                <option value="random">Random</option>
+              </select>
+            </label>
+
+            <label class="full">Auto rotator proxy list
+              <textarea id="proxyServers" spellcheck="false" placeholder="http://proxy-one:8000&#10;socks5://proxy-two:9000"></textarea>
+              <span class="hint">One proxy per line. A different entry is selected on each assistant launch.</span>
+            </label>
+
             <div class="checks full">
               <label class="check"><input id="proxyEnabled" type="checkbox"> Proxy enabled</label>
-              <label class="check"><input id="rotatingProxy" type="checkbox"> Auto-rotating endpoint</label>
+              <label class="check"><input id="rotatingProxy" type="checkbox"> Provider rotates this endpoint</label>
               <label class="check"><input id="autofill" type="checkbox"> Autofill known fields</label>
               <label class="check"><input id="refresh" type="checkbox"> Refresh between checks</label>
               <label class="check"><input id="serviceHours" type="checkbox"> Service hours only</label>
@@ -497,13 +539,20 @@ HTML = """<!doctype html>
       centres: document.querySelector("#centres"),
       keywords: document.querySelector("#keywords"),
       pollSeconds: document.querySelector("#pollSeconds"),
+      jitterSeconds: document.querySelector("#jitterSeconds"),
+      errorBackoffSeconds: document.querySelector("#errorBackoffSeconds"),
+      rateLimitCooldownSeconds: document.querySelector("#rateLimitCooldownSeconds"),
       maxChecks: document.querySelector("#maxChecks"),
       licenceNumber: document.querySelector("#licenceNumber"),
       testReference: document.querySelector("#testReference"),
       theoryNumber: document.querySelector("#theoryNumber"),
+      proxyMode: document.querySelector("#proxyMode"),
+      localProxyServer: document.querySelector("#localProxyServer"),
       proxyServer: document.querySelector("#proxyServer"),
+      proxyServers: document.querySelector("#proxyServers"),
       proxyUsername: document.querySelector("#proxyUsername"),
       proxyPassword: document.querySelector("#proxyPassword"),
+      rotationStrategy: document.querySelector("#rotationStrategy"),
       proxyEnabled: document.querySelector("#proxyEnabled"),
       rotatingProxy: document.querySelector("#rotatingProxy"),
       autofill: document.querySelector("#autofill"),
@@ -528,6 +577,29 @@ HTML = """<!doctype html>
       toast.className = "toast " + type;
     }
 
+    function proxyModeFromConfig(config) {
+      if (config.proxy.mode) return config.proxy.mode;
+      if (!config.proxy.enabled) return "off";
+      return config.proxy.provider_managed_rotating_endpoint ? "provider_rotating" : "single";
+    }
+
+    function proxyLabel(mode) {
+      const labels = {
+        off: "Proxy off",
+        local: "Local proxy",
+        single: "Single proxy",
+        provider_rotating: "Provider rotator",
+        rotating_list: "Auto rotator"
+      };
+      return labels[mode] || "Proxy";
+    }
+
+    function updateProxyChip() {
+      const mode = fields.proxyEnabled.checked ? fields.proxyMode.value : "off";
+      proxyChip.textContent = proxyLabel(mode);
+      proxyChip.classList.toggle("warn", mode === "off");
+    }
+
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme;
       localStorage.setItem("dvsa-theme", theme);
@@ -542,25 +614,32 @@ HTML = """<!doctype html>
       fields.centres.value = (config.search.preferred_test_centres || []).join("\\n");
       fields.keywords.value = (config.search.preferred_keywords || []).join("\\n");
       fields.pollSeconds.value = config.search.poll_seconds ?? 180;
+      fields.jitterSeconds.value = config.search.rate_limit_jitter_seconds ?? 20;
+      fields.errorBackoffSeconds.value = config.search.error_backoff_seconds ?? 300;
+      fields.rateLimitCooldownSeconds.value = config.search.rate_limit_cooldown_seconds ?? 3600;
       fields.maxChecks.value = config.search.max_checks ?? 0;
       fields.licenceNumber.value = config.candidate.driving_licence_number || "";
       fields.testReference.value = config.candidate.driving_test_reference || "";
       fields.theoryNumber.value = config.candidate.theory_test_pass_number || "";
+      fields.proxyMode.value = proxyModeFromConfig(config);
+      fields.localProxyServer.value = config.proxy.local_server || "http://127.0.0.1:8080";
       fields.proxyServer.value = config.proxy.server || "";
+      fields.proxyServers.value = (config.proxy.servers || []).join("\\n");
       fields.proxyUsername.value = config.proxy.username || "";
       fields.proxyPassword.value = config.proxy.password || "";
-      fields.proxyEnabled.checked = Boolean(config.proxy.enabled);
-      fields.rotatingProxy.checked = Boolean(config.proxy.provider_managed_rotating_endpoint);
+      fields.rotationStrategy.value = config.proxy.rotation_strategy || "round_robin";
+      fields.proxyEnabled.checked = fields.proxyMode.value !== "off" || Boolean(config.proxy.enabled);
+      fields.rotatingProxy.checked = fields.proxyMode.value === "provider_rotating" || Boolean(config.proxy.provider_managed_rotating_endpoint);
       fields.autofill.checked = Boolean(config.candidate.autofill_known_fields);
       fields.refresh.checked = Boolean(config.search.refresh_between_checks);
       fields.serviceHours.checked = Boolean(config.search.service_hours_only);
       fields.clickStart.checked = Boolean(config.browser.click_start_now);
       configChip.textContent = source === "local" ? "Local config" : "Example config";
-      proxyChip.textContent = fields.proxyEnabled.checked ? "Proxy on" : "Proxy off";
-      proxyChip.classList.toggle("warn", !fields.proxyEnabled.checked);
+      updateProxyChip();
     }
 
     function collectForm() {
+      const selectedProxyMode = fields.proxyEnabled.checked ? fields.proxyMode.value : "off";
       return {
         candidate: {
           driving_licence_number: fields.licenceNumber.value.trim(),
@@ -576,17 +655,25 @@ HTML = """<!doctype html>
           preferred_date_from: fields.dateFrom.value,
           preferred_date_to: fields.dateTo.value,
           poll_seconds: Number(fields.pollSeconds.value || 180),
+          rate_limit_jitter_seconds: Number(fields.jitterSeconds.value || 0),
+          error_backoff_seconds: Number(fields.errorBackoffSeconds.value || 300),
+          rate_limit_cooldown_seconds: Number(fields.rateLimitCooldownSeconds.value || 3600),
           max_checks: Number(fields.maxChecks.value || 0),
           refresh_between_checks: fields.refresh.checked,
           stop_before_final_confirmation: true,
           service_hours_only: fields.serviceHours.checked
         },
         proxy: {
-          enabled: fields.proxyEnabled.checked,
+          enabled: selectedProxyMode !== "off",
+          mode: selectedProxyMode,
           server: fields.proxyServer.value.trim(),
+          local_server: fields.localProxyServer.value.trim(),
+          servers: splitLines(fields.proxyServers.value),
           username: fields.proxyUsername.value.trim(),
           password: fields.proxyPassword.value,
-          provider_managed_rotating_endpoint: fields.rotatingProxy.checked
+          rotation_strategy: fields.rotationStrategy.value,
+          rotation_state_path: ".proxy-rotation-state.json",
+          provider_managed_rotating_endpoint: selectedProxyMode === "provider_rotating" || fields.rotatingProxy.checked
         },
         browser: {
           headless: false,
@@ -675,8 +762,18 @@ HTML = """<!doctype html>
     document.querySelector("#dayMode").addEventListener("click", () => setTheme("day"));
     document.querySelector("#nightMode").addEventListener("click", () => setTheme("night"));
     fields.proxyEnabled.addEventListener("change", () => {
-      proxyChip.textContent = fields.proxyEnabled.checked ? "Proxy on" : "Proxy off";
-      proxyChip.classList.toggle("warn", !fields.proxyEnabled.checked);
+      if (fields.proxyEnabled.checked && fields.proxyMode.value === "off") {
+        fields.proxyMode.value = "local";
+      }
+      if (!fields.proxyEnabled.checked) {
+        fields.proxyMode.value = "off";
+      }
+      updateProxyChip();
+    });
+    fields.proxyMode.addEventListener("change", () => {
+      fields.proxyEnabled.checked = fields.proxyMode.value !== "off";
+      fields.rotatingProxy.checked = fields.proxyMode.value === "provider_rotating";
+      updateProxyChip();
     });
 
     setTheme(localStorage.getItem("dvsa-theme") || "day");
@@ -790,14 +887,25 @@ def read_current_config() -> dict[str, Any]:
     source_path = CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_CONFIG_PATH
     if source_path.exists():
         with source_path.open("r", encoding="utf-8") as handle:
-            config = json.load(handle)
+            raw_config = json.load(handle)
     else:
-        config = default_config()
+        raw_config = {}
+    config = merge_dict(default_config(), raw_config)
     return {
         "source": "local" if source_path == CONFIG_PATH else "example",
         "config": config,
         "running": assistant_is_running(),
     }
+
+
+def merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def read_logs() -> dict[str, str]:
@@ -847,6 +955,13 @@ def build_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "preferred_date_from": clean_string(search.get("preferred_date_from", "")),
             "preferred_date_to": clean_string(search.get("preferred_date_to", "")),
             "poll_seconds": int(search.get("poll_seconds", 180)),
+            "rate_limit_jitter_seconds": int(
+                search.get("rate_limit_jitter_seconds", 20)
+            ),
+            "error_backoff_seconds": int(search.get("error_backoff_seconds", 300)),
+            "rate_limit_cooldown_seconds": int(
+                search.get("rate_limit_cooldown_seconds", 3600)
+            ),
             "max_checks": int(search.get("max_checks", 0)),
             "refresh_between_checks": bool(search.get("refresh_between_checks", True)),
             "stop_before_final_confirmation": True,
@@ -856,9 +971,19 @@ def build_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     config["proxy"].update(
         {
             "enabled": bool(proxy.get("enabled", False)),
+            "mode": clean_string(proxy.get("mode", "off")) or "off",
             "server": clean_string(proxy.get("server", "")),
+            "local_server": clean_string(
+                proxy.get("local_server", "http://127.0.0.1:8080")
+            ),
+            "servers": clean_string_list(proxy.get("servers", [])),
             "username": clean_string(proxy.get("username", "")),
             "password": str(proxy.get("password", "")),
+            "rotation_strategy": clean_string(
+                proxy.get("rotation_strategy", "round_robin")
+            )
+            or "round_robin",
+            "rotation_state_path": ".proxy-rotation-state.json",
             "provider_managed_rotating_endpoint": bool(
                 proxy.get("provider_managed_rotating_endpoint", True)
             ),
