@@ -1,0 +1,130 @@
+DVSA Appointment Setter - Operating Notes
+========================================
+
+This software is a headful browser assistant for the DVSA practical driving test service. It opens the official GOV.UK/DVSA flow, lets the learner complete any security steps, watches the appointment/results page for preferred text, and alerts when it sees a possible match.
+
+Important use notes
+-------------------
+Use this only for your own driving test booking. GOV.UK says the learner must make appointment changes themselves and must not book, change, swap, or cancel a car driving test for someone else.
+
+The program does not bypass CAPTCHA, security checks, payment screens, or final confirmation pages. Review the browser yourself before you change, book, pay for, or confirm anything.
+
+Files
+-----
+Core Engine\dvsa_appointment_setter\  Main Python package.
+Core Engine\config.example.json       Example settings file.
+Core Engine\requirements.txt          Python dependency list.
+Core Engine\run.bat                   Quick Windows launcher.
+Logs\development log.md               Build notes.
+Logs\process Log.md                   Runtime/process notes.
+
+Setup
+-----
+1. Install Python 3.11 or newer.
+2. Open PowerShell.
+3. Go to the engine folder:
+
+   cd "D:\work\Projects\DSVA Bot\Software\Core Engine"
+
+4. Install the Python dependency:
+
+   python -m pip install -r requirements.txt
+
+5. Install the Playwright browser:
+
+   python -m playwright install chromium
+
+Configuration
+-------------
+The starter config is:
+
+   Core Engine\config.example.json
+
+For normal use, make your own local copy:
+
+   copy "config.example.json" "config.local.json"
+
+Then edit config.local.json.
+
+Useful settings:
+
+- search.start_url
+  Default is https://www.gov.uk/change-driving-test
+  For a new practical test booking, use https://www.gov.uk/book-driving-test
+
+- search.preferred_test_centres
+  Add the test centre names you care about, for example:
+  "Birmingham Kings Heath" or "London Mill Hill"
+
+- search.preferred_keywords
+  Add words that should appear on a useful result page, for example:
+  "available", "change to this test", or "book this test"
+
+- search.preferred_date_from and search.preferred_date_to
+  Optional date range in YYYY-MM-DD format.
+
+- search.poll_seconds
+  How long to wait between checks. Keep this respectful. The app will not accept less than 60 seconds.
+
+- proxy.enabled
+  Set to true only if you have a proxy you are allowed to use.
+
+- proxy.server
+  Put the proxy endpoint here, for example:
+  http://host:port
+  socks5://host:port
+
+- proxy.username and proxy.password
+  Fill these if your proxy provider needs authentication.
+
+- proxy.provider_managed_rotating_endpoint
+  Leave this true when your proxy company gives you one endpoint that rotates automatically on their side.
+
+Run
+---
+From the Core Engine folder:
+
+   python -m dvsa_appointment_setter.cli --config config.local.json
+
+Or double-click:
+
+   Core Engine\run.bat
+
+Basic workflow
+--------------
+1. Start the program.
+2. A Chromium browser opens on the GOV.UK page.
+3. If the Start now link is found, the program clicks it.
+4. Complete any DVSA security or login steps yourself.
+5. Navigate to the page where appointment slots or result text is visible.
+6. Return to PowerShell and press Enter.
+7. The program checks the visible page text against your centre, keyword, and date settings.
+8. If it finds a possible match, it beeps and prints the matched text.
+9. Review and confirm any appointment action yourself in the browser.
+
+One-check test run
+------------------
+Use this to make sure the setup works without leaving the monitor running:
+
+   python -m dvsa_appointment_setter.cli --config config.local.json --once
+
+Logs
+----
+Runtime activity is written to:
+
+   Logs\process Log.md
+
+Development notes are kept in:
+
+   Logs\development log.md
+
+Troubleshooting
+---------------
+If Playwright is missing:
+
+   python -m pip install -r requirements.txt
+   python -m playwright install chromium
+
+If the bot says the config URL is not allowed, use an official GOV.UK or DVSA service URL.
+
+If no matches are found, adjust the preferred test centre names, keywords, or date range in the config.

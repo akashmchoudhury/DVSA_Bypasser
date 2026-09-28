@@ -1,0 +1,43 @@
+{
+  "candidate": {
+    "driving_licence_number": "",
+    "driving_test_reference": "",
+    "theory_test_pass_number": "",
+    "autofill_known_fields": false
+  },
+  "search": {
+    "mode": "change-driving-test",
+    "start_url": "https://www.gov.uk/change-driving-test",
+    "preferred_test_centres": [
+      "London Mill Hill"
+    ],
+    "preferred_keywords": [
+      "available",
+      "change to this test"
+    ],
+    "preferred_date_from": "",
+    "preferred_date_to": "",
+    "poll_seconds": 180,
+    "max_checks": 0,
+    "refresh_between_checks": true,
+    "stop_before_final_confirmation": true,
+    "service_hours_only": true
+  },
+  "proxy": {
+    "enabled": false,
+    "server": "",
+    "username": "",
+    "password": "",
+    "provider_managed_rotating_endpoint": true
+  },
+  "browser": {
+    "headless": false,
+    "slow_mo_ms": 80,
+    "user_data_dir": ".browser-profile",
+    "click_start_now": true,
+    "navigation_timeout_ms": 45000
+  },
+  "logging": {
+    "process_log_path": "../Logs/process Log.md"
+  }
+}

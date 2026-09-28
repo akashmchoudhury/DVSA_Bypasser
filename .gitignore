@@ -1,0 +1,5 @@
+Core Engine/.browser-profile/
+Core Engine/config.local.json
+Core Engine/__pycache__/
+Core Engine/dvsa_appointment_setter/__pycache__/
+*.pyc
