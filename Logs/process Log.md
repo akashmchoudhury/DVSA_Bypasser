@@ -24,3 +24,17 @@
 - 2026-09-28 17:33:57 | review pass 1 | repeatable project checks passed
 - 2026-09-28 17:33:57 | review pass 2 | repeatable project checks passed
 - 2026-09-28 17:33:57 | review pass 3 | repeatable project checks passed
+- 2026-09-29 00:12 | dashboard update | I added manual appointment recording to Storage daily CSV files and the local dashboard.
+- 2026-09-28 17:42:40 | ui launch | assistant started
+- 2026-09-28 17:42:40 | session started | browser automation launched
+- 2026-09-29 16:37:38 | review pass 1 | repeatable project checks passed
+- 2026-09-29 16:37:38 | review pass 2 | repeatable project checks passed
+- 2026-09-29 16:37:38 | review pass 3 | repeatable project checks passed
+- 2026-09-29 16:45 | ui update | I removed log display from the screen while keeping file logging active.
+- 2026-09-29 16:40:02 | review pass 1 | repeatable project checks passed
+- 2026-09-29 16:40:02 | review pass 2 | repeatable project checks passed
+- 2026-09-29 16:40:02 | review pass 3 | repeatable project checks passed
+- 2026-09-29 16:52 | browser update | I added Chrome and Edge selection and a manual verification pause/resume prompt.
+- 2026-09-29 17:30:30 | review pass 1 | repeatable project checks passed
+- 2026-09-29 17:30:30 | review pass 2 | repeatable project checks passed
+- 2026-09-29 17:30:30 | review pass 3 | repeatable project checks passed

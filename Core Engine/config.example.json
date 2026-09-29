@@ -39,10 +39,12 @@
     "provider_managed_rotating_endpoint": true
   },
   "browser": {
+    "channel": "chromium",
     "headless": false,
     "slow_mo_ms": 80,
     "user_data_dir": ".browser-profile",
     "click_start_now": true,
+    "manual_verification_pause": true,
     "navigation_timeout_ms": 45000
   },
   "logging": {

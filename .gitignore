@@ -3,4 +3,5 @@ Core Engine/config.local.json
 Core Engine/.proxy-rotation-state.json
 Core Engine/__pycache__/
 Core Engine/dvsa_appointment_setter/__pycache__/
+Storage/*.csv
 *.pyc

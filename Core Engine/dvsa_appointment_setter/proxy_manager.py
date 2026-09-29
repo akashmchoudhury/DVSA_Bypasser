@@ -43,6 +43,25 @@ def select_rotating_server(config: ProxyConfig) -> str:
     return selected
 
 
+def describe_next_proxy(config: ProxyConfig) -> str:
+    if not config.enabled or config.mode == "off":
+        return "proxy disabled"
+    if config.mode == "local":
+        return f"local proxy {redact_proxy_server(config.local_server)}"
+    if config.mode == "single":
+        return f"single proxy {redact_proxy_server(config.server)}"
+    if config.mode == "provider_rotating":
+        return f"provider rotating endpoint {redact_proxy_server(config.server)}"
+    if not config.servers:
+        return "auto rotator has no proxies"
+    if config.rotation_strategy == "random":
+        return f"auto rotator random from {len(config.servers)} proxies"
+    state = read_rotation_state(config)
+    next_index = int(state.get("index", 0)) % len(config.servers)
+    selected = config.servers[next_index]
+    return f"next launch uses {redact_proxy_server(selected)}"
+
+
 def read_rotation_state(config: ProxyConfig) -> dict[str, int]:
     path = config.rotation_state_path
     if not path.exists():

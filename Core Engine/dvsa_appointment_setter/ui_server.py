@@ -12,8 +12,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from .appointment_store import append_appointment, dashboard_data
 from .config import CORE_ROOT, SOFTWARE_ROOT, default_config, load_config
 from .logger import MarkdownProcessLogger
+from .proxy_manager import describe_next_proxy
 
 
 CONFIG_PATH = CORE_ROOT / "config.local.json"
@@ -351,6 +353,67 @@ HTML = """<!doctype html>
       font: 13px/1.55 Consolas, "Cascadia Mono", monospace;
     }
 
+    .dashboard-panel {
+      max-width: 1180px;
+      margin: 18px auto 0;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
+      padding: 12px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      margin-top: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+      background: var(--surface);
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-strong);
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+
     .toast {
       min-height: 24px;
       margin-top: 12px;
@@ -366,7 +429,7 @@ HTML = """<!doctype html>
       .topbar { align-items: flex-start; flex-direction: column; }
       .toolbar { width: 100%; justify-content: space-between; }
       .layout { grid-template-columns: 1fr; }
-      .grid, .checks { grid-template-columns: 1fr; }
+      .grid, .checks, .metrics { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -390,7 +453,7 @@ HTML = """<!doctype html>
     </header>
 
     <section class="layout">
-      <form class="panel" id="settingsForm">
+      <form class="panel full" id="settingsForm">
         <div class="panel-header">
           <h2>Settings</h2>
           <div class="status-row">
@@ -457,6 +520,15 @@ HTML = """<!doctype html>
               <input id="theoryNumber" autocomplete="off">
             </label>
 
+            <label>Browser
+              <select id="browserChannel">
+                <option value="chromium">Chromium</option>
+                <option value="chrome">Google Chrome</option>
+                <option value="msedge">Microsoft Edge</option>
+              </select>
+              <span class="hint">Chrome or Edge must already be installed on this computer</span>
+            </label>
+
             <label>Proxy mode
               <select id="proxyMode">
                 <option value="off">Off</option>
@@ -503,31 +575,105 @@ HTML = """<!doctype html>
               <label class="check"><input id="refresh" type="checkbox"> Refresh between checks</label>
               <label class="check"><input id="serviceHours" type="checkbox"> Service hours only</label>
               <label class="check"><input id="clickStart" type="checkbox"> Click Start now</label>
+              <label class="check"><input id="manualVerificationPause" type="checkbox"> Pause for manual verification</label>
             </div>
           </div>
 
           <div class="actions">
             <button class="btn" type="submit">Save Settings</button>
             <button class="btn secondary" id="reloadBtn" type="button">Reload</button>
-            <button class="btn secondary" id="logsBtn" type="button">Refresh Logs</button>
           </div>
           <div class="toast" id="toast"></div>
         </div>
       </form>
+    </section>
 
-      <aside class="panel">
-        <div class="panel-header">
-          <h2>Logs</h2>
-          <span class="chip" id="processChip">Ready</span>
+    <section class="panel dashboard-panel">
+      <div class="panel-header">
+        <h2>Appointment Dashboard</h2>
+        <div class="status-row">
+          <span class="chip" id="appointmentFileChip">Storage</span>
+          <span class="chip" id="appointmentTargetChip">0 / 10</span>
         </div>
-        <div class="panel-body">
-          <div class="tabs">
-            <button class="tab active" id="processTab" type="button">Process</button>
-            <button class="tab" id="devTab" type="button">Development</button>
+      </div>
+      <div class="panel-body">
+        <div class="metrics">
+          <div class="metric">
+            <strong id="appointmentCount">0</strong>
+            <span>Recorded today</span>
           </div>
-          <pre id="logOutput">Loading...</pre>
+          <div class="metric">
+            <strong id="appointmentRemaining">10</strong>
+            <span>Remaining to 10</span>
+          </div>
+          <div class="metric">
+            <strong id="appointmentProxy">Off</strong>
+            <span>Next proxy session</span>
+          </div>
         </div>
-      </aside>
+
+        <form id="appointmentForm" class="grid">
+          <label>Action
+            <select id="appointmentAction">
+              <option value="changed">Changed</option>
+              <option value="booked">Booked</option>
+            </select>
+          </label>
+
+          <label>Learner name
+            <input id="appointmentLearner" autocomplete="off">
+          </label>
+
+          <label>Licence last 4
+            <input id="appointmentLicenceLast4" maxlength="4" autocomplete="off">
+          </label>
+
+          <label>Test centre
+            <input id="appointmentCentre" autocomplete="off">
+          </label>
+
+          <label>Appointment date
+            <input id="appointmentDate" type="date">
+          </label>
+
+          <label>Appointment time
+            <input id="appointmentTime" type="time">
+          </label>
+
+          <label>Booking reference
+            <input id="appointmentReference" autocomplete="off">
+          </label>
+
+          <label class="full">Notes
+            <textarea id="appointmentNotes" spellcheck="false"></textarea>
+          </label>
+
+          <div class="actions full">
+            <button class="btn" type="submit">Record Appointment</button>
+            <button class="btn secondary" id="refreshAppointmentsBtn" type="button">Refresh Dashboard</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Recorded</th>
+                <th>Action</th>
+                <th>Learner</th>
+                <th>Centre</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Reference</th>
+                <th>Proxy</th>
+              </tr>
+            </thead>
+            <tbody id="appointmentRows">
+              <tr><td colspan="8">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -546,6 +692,7 @@ HTML = """<!doctype html>
       licenceNumber: document.querySelector("#licenceNumber"),
       testReference: document.querySelector("#testReference"),
       theoryNumber: document.querySelector("#theoryNumber"),
+      browserChannel: document.querySelector("#browserChannel"),
       proxyMode: document.querySelector("#proxyMode"),
       localProxyServer: document.querySelector("#localProxyServer"),
       proxyServer: document.querySelector("#proxyServer"),
@@ -558,15 +705,27 @@ HTML = """<!doctype html>
       autofill: document.querySelector("#autofill"),
       refresh: document.querySelector("#refresh"),
       serviceHours: document.querySelector("#serviceHours"),
-      clickStart: document.querySelector("#clickStart")
+      clickStart: document.querySelector("#clickStart"),
+      manualVerificationPause: document.querySelector("#manualVerificationPause"),
+      appointmentAction: document.querySelector("#appointmentAction"),
+      appointmentLearner: document.querySelector("#appointmentLearner"),
+      appointmentLicenceLast4: document.querySelector("#appointmentLicenceLast4"),
+      appointmentCentre: document.querySelector("#appointmentCentre"),
+      appointmentDate: document.querySelector("#appointmentDate"),
+      appointmentTime: document.querySelector("#appointmentTime"),
+      appointmentReference: document.querySelector("#appointmentReference"),
+      appointmentNotes: document.querySelector("#appointmentNotes")
     };
 
     const toast = document.querySelector("#toast");
-    const logOutput = document.querySelector("#logOutput");
     const configChip = document.querySelector("#configChip");
     const proxyChip = document.querySelector("#proxyChip");
-    const processChip = document.querySelector("#processChip");
-    let activeLog = "process";
+    const appointmentRows = document.querySelector("#appointmentRows");
+    const appointmentCount = document.querySelector("#appointmentCount");
+    const appointmentRemaining = document.querySelector("#appointmentRemaining");
+    const appointmentProxy = document.querySelector("#appointmentProxy");
+    const appointmentFileChip = document.querySelector("#appointmentFileChip");
+    const appointmentTargetChip = document.querySelector("#appointmentTargetChip");
 
     function splitLines(value) {
       return value.split("\\n").map((item) => item.trim()).filter(Boolean);
@@ -575,6 +734,16 @@ HTML = """<!doctype html>
     function showToast(message, type = "") {
       toast.textContent = message;
       toast.className = "toast " + type;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
     }
 
     function proxyModeFromConfig(config) {
@@ -621,6 +790,7 @@ HTML = """<!doctype html>
       fields.licenceNumber.value = config.candidate.driving_licence_number || "";
       fields.testReference.value = config.candidate.driving_test_reference || "";
       fields.theoryNumber.value = config.candidate.theory_test_pass_number || "";
+      fields.browserChannel.value = config.browser.channel || "chromium";
       fields.proxyMode.value = proxyModeFromConfig(config);
       fields.localProxyServer.value = config.proxy.local_server || "http://127.0.0.1:8080";
       fields.proxyServer.value = config.proxy.server || "";
@@ -634,6 +804,7 @@ HTML = """<!doctype html>
       fields.refresh.checked = Boolean(config.search.refresh_between_checks);
       fields.serviceHours.checked = Boolean(config.search.service_hours_only);
       fields.clickStart.checked = Boolean(config.browser.click_start_now);
+      fields.manualVerificationPause.checked = config.browser.manual_verification_pause !== false;
       configChip.textContent = source === "local" ? "Local config" : "Example config";
       updateProxyChip();
     }
@@ -676,15 +847,27 @@ HTML = """<!doctype html>
           provider_managed_rotating_endpoint: selectedProxyMode === "provider_rotating" || fields.rotatingProxy.checked
         },
         browser: {
+          channel: fields.browserChannel.value,
           headless: false,
           slow_mo_ms: 80,
           user_data_dir: ".browser-profile",
           click_start_now: fields.clickStart.checked,
+          manual_verification_pause: fields.manualVerificationPause.checked,
           navigation_timeout_ms: 45000
-        },
-        logging: {
-          process_log_path: "../Logs/process Log.md"
         }
+      };
+    }
+
+    function collectAppointmentForm() {
+      return {
+        action: fields.appointmentAction.value,
+        learner_name: fields.appointmentLearner.value.trim(),
+        driving_licence_last4: fields.appointmentLicenceLast4.value.trim(),
+        test_centre: fields.appointmentCentre.value.trim(),
+        appointment_date: fields.appointmentDate.value,
+        appointment_time: fields.appointmentTime.value,
+        booking_reference: fields.appointmentReference.value.trim(),
+        notes: fields.appointmentNotes.value.trim()
       };
     }
 
@@ -711,18 +894,53 @@ HTML = """<!doctype html>
       showToast(data.message, "ok");
     }
 
-    async function loadLogs() {
-      const data = await api("/api/logs");
-      logOutput.textContent = data[activeLog] || "";
+    function renderAppointments(data) {
+      appointmentCount.textContent = data.count;
+      appointmentRemaining.textContent = data.remaining;
+      appointmentTargetChip.textContent = `${data.count} / ${data.target}`;
+      appointmentFileChip.textContent = data.path.split(/[\\\\/]/).pop();
+      appointmentProxy.textContent = data.next_proxy || "Off";
+
+      if (!data.appointments.length) {
+        appointmentRows.innerHTML = '<tr><td colspan="8">No appointments recorded today.</td></tr>';
+        return;
+      }
+
+      appointmentRows.innerHTML = data.appointments.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.recorded_at)}</td>
+          <td>${escapeHtml(item.action)}</td>
+          <td>${escapeHtml(item.learner_name)}</td>
+          <td>${escapeHtml(item.test_centre)}</td>
+          <td>${escapeHtml(item.appointment_date)}</td>
+          <td>${escapeHtml(item.appointment_time)}</td>
+          <td>${escapeHtml(item.booking_reference)}</td>
+          <td>${escapeHtml(item.proxy_label || item.proxy_mode)}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadAppointments() {
+      const data = await api("/api/appointments");
+      renderAppointments(data);
+    }
+
+    async function recordAppointment() {
+      const data = await api("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(collectAppointmentForm())
+      });
+      renderAppointments(data.dashboard);
+      fields.appointmentNotes.value = "";
+      showToast(data.message, "ok");
     }
 
     async function launchAssistant() {
       document.querySelector("#launchBtn").disabled = true;
       try {
         const data = await api("/api/launch", { method: "POST" });
-        processChip.textContent = data.running ? "Running" : "Started";
         showToast(data.message, "ok");
-        await loadLogs();
       } finally {
         document.querySelector("#launchBtn").disabled = false;
       }
@@ -737,26 +955,17 @@ HTML = """<!doctype html>
       try { await loadConfig(); } catch (error) { showToast(error.message, "bad"); }
     });
 
-    document.querySelector("#logsBtn").addEventListener("click", async () => {
-      try { await loadLogs(); showToast("Logs refreshed.", "ok"); } catch (error) { showToast(error.message, "bad"); }
-    });
-
     document.querySelector("#launchBtn").addEventListener("click", async () => {
       try { await saveConfig(); await launchAssistant(); } catch (error) { showToast(error.message, "bad"); }
     });
 
-    document.querySelector("#processTab").addEventListener("click", async () => {
-      activeLog = "process";
-      document.querySelector("#processTab").classList.add("active");
-      document.querySelector("#devTab").classList.remove("active");
-      await loadLogs();
+    document.querySelector("#appointmentForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      try { await recordAppointment(); } catch (error) { showToast(error.message, "bad"); }
     });
 
-    document.querySelector("#devTab").addEventListener("click", async () => {
-      activeLog = "development";
-      document.querySelector("#devTab").classList.add("active");
-      document.querySelector("#processTab").classList.remove("active");
-      await loadLogs();
+    document.querySelector("#refreshAppointmentsBtn").addEventListener("click", async () => {
+      try { await loadAppointments(); showToast("Appointment dashboard refreshed.", "ok"); } catch (error) { showToast(error.message, "bad"); }
     });
 
     document.querySelector("#dayMode").addEventListener("click", () => setTheme("day"));
@@ -777,7 +986,7 @@ HTML = """<!doctype html>
     });
 
     setTheme(localStorage.getItem("dvsa-theme") || "day");
-    loadConfig().then(loadLogs).catch((error) => showToast(error.message, "bad"));
+    loadConfig().then(loadAppointments).catch((error) => showToast(error.message, "bad"));
   </script>
 </body>
 </html>
@@ -804,8 +1013,8 @@ class UiRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/api/config":
             self._send_json(read_current_config())
             return
-        if self.path == "/api/logs":
-            self._send_json(read_logs())
+        if self.path == "/api/appointments":
+            self._send_json(read_appointment_dashboard())
             return
         if self.path == "/api/health":
             self._send_json({"ok": True, "running": assistant_is_running()})
@@ -818,6 +1027,9 @@ class UiRequestHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/launch":
             self._handle_launch()
+            return
+        if self.path == "/api/appointments":
+            self._handle_record_appointment()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -853,6 +1065,34 @@ class UiRequestHandler(BaseHTTPRequestHandler):
                         else "Assistant launched in a separate console."
                     ),
                     "running": assistant_is_running(),
+                }
+            )
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_record_appointment(self) -> None:
+        try:
+            payload = self._read_json_body()
+            config = current_app_config()
+            proxy_label = describe_next_proxy(config.proxy)
+            dashboard = append_appointment(
+                payload,
+                proxy_mode=config.proxy.mode,
+                proxy_label=proxy_label,
+            )
+            dashboard["next_proxy"] = proxy_label
+            action = str(payload.get("action", "changed")).strip() or "changed"
+            MarkdownProcessLogger(PROCESS_LOG_PATH).append(
+                "appointment recorded",
+                f"{action}; stored in {dashboard['path']}",
+            )
+            message = "Appointment recorded in today's storage CSV."
+            if config.proxy.mode == "rotating_list":
+                message += " The next assistant launch will use the next auto-rotator proxy."
+            self._send_json(
+                {
+                    "message": message,
+                    "dashboard": dashboard,
                 }
             )
         except Exception as exc:
@@ -908,18 +1148,15 @@ def merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
-def read_logs() -> dict[str, str]:
-    return {
-        "process": read_text_or_empty(PROCESS_LOG_PATH),
-        "development": read_text_or_empty(DEVELOPMENT_LOG_PATH),
-    }
+def read_appointment_dashboard() -> dict[str, Any]:
+    dashboard = dashboard_data()
+    dashboard["next_proxy"] = describe_next_proxy(current_app_config().proxy)
+    return dashboard
 
 
-def read_text_or_empty(path: Path) -> str:
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8")
-
+def current_app_config():
+    config_path = CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_CONFIG_PATH
+    return load_config(config_path)
 
 def build_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     candidate = get_dict(payload, "candidate")
@@ -991,10 +1228,14 @@ def build_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     config["browser"].update(
         {
+            "channel": clean_string(browser.get("channel", "chromium")) or "chromium",
             "headless": False,
             "slow_mo_ms": int(browser.get("slow_mo_ms", 80)),
             "user_data_dir": ".browser-profile",
             "click_start_now": bool(browser.get("click_start_now", True)),
+            "manual_verification_pause": bool(
+                browser.get("manual_verification_pause", True)
+            ),
             "navigation_timeout_ms": int(browser.get("navigation_timeout_ms", 45000)),
         }
     )

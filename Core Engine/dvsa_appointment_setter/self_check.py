@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import CORE_ROOT, SOFTWARE_ROOT, load_config
+from .appointment_store import normalize_record
+from .browser_bot import AppointmentAssistant
 from .logger import MarkdownProcessLogger
 from .matcher import AvailabilityMatcher
 from .rate_limiter import RateLimiter
@@ -35,7 +37,9 @@ def run_three_pass_review() -> int:
         check_python_sources,
         check_config_loading,
         check_matcher,
+        check_appointment_store,
         check_rate_limiter,
+        check_manual_verification_detection,
         check_ui_markup,
     ]
 
@@ -109,6 +113,25 @@ def check_matcher(_: str) -> None:
         raise CheckFailed("matcher did not find the sample appointment text")
 
 
+def check_appointment_store(_: str) -> None:
+    row = normalize_record(
+        {
+            "action": "changed",
+            "learner_name": "Test User",
+            "driving_licence_last4": "1234",
+            "test_centre": "London Mill Hill",
+            "appointment_date": "2026-10-12",
+            "appointment_time": "10:30",
+            "booking_reference": "ABC123",
+            "notes": "sample row",
+        },
+        proxy_mode="rotating_list",
+        proxy_label="next launch uses http://proxy-one:8000",
+    )
+    if row["action"] != "changed" or row["test_centre"] != "London Mill Hill":
+        raise CheckFailed("appointment storage normalization failed")
+
+
 def check_rate_limiter(_: str) -> None:
     now = [100.0]
     limiter = RateLimiter(
@@ -136,6 +159,14 @@ def check_rate_limiter(_: str) -> None:
         raise CheckFailed("rate limiter did not apply the rate-limit cooldown")
 
 
+def check_manual_verification_detection(_: str) -> None:
+    reason = AppointmentAssistant._detect_verification_text(
+        None, "Please complete the security check to prove you are human."
+    )
+    if not reason:
+        raise CheckFailed("manual verification detector missed a sample prompt")
+
+
 def check_ui_markup(_: str) -> None:
     required_bits = [
         "DVSA Appointment Setter",
@@ -148,12 +179,28 @@ def check_ui_markup(_: str) -> None:
         "Jitter seconds",
         "Error backoff seconds",
         "Rate limit cooldown seconds",
+        "Appointment Dashboard",
+        "Record Appointment",
+        "Google Chrome",
+        "Microsoft Edge",
+        "Pause for manual verification",
         "--coffee",
         "--bg",
     ]
     missing = [item for item in required_bits if item not in HTML]
     if missing:
         raise CheckFailed("UI markup is missing expected controls: " + ", ".join(missing))
+
+    hidden_log_bits = [
+        "<h2>Logs</h2>",
+        "Refresh Logs",
+        "logOutput",
+        "processTab",
+        "devTab",
+    ]
+    visible_logs = [item for item in hidden_log_bits if item in HTML]
+    if visible_logs:
+        raise CheckFailed("UI should not display logs: " + ", ".join(visible_logs))
 
 
 def build_parser() -> argparse.ArgumentParser:

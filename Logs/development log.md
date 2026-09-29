@@ -25,3 +25,15 @@
 - 2026-09-28 17:33:57 | Review pass 1: I ran the repeatable project checks and they passed.
 - 2026-09-28 17:33:57 | Review pass 2: I ran the repeatable project checks and they passed.
 - 2026-09-28 17:33:57 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-29 00:12 | I checked the instruction file first, then added a manual appointment dashboard and daily CSV storage in the Storage folder. I kept proxy rotation tied to browser launch sessions instead of automating batches of bookings.
+- 2026-09-29 16:37:38 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:37:38 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:37:38 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:45 | I checked the instruction file first, then removed the on-screen log panel and log refresh controls. The log files still get maintained in the Logs folder.
+- 2026-09-29 16:40:02 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:40:02 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:40:02 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-09-29 16:52 | I checked the instruction file first, then added browser selection for Chromium, Chrome, and Edge, plus a manual verification pause/resume flow for CAPTCHA or security-check pages.
+- 2026-09-29 17:30:30 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-09-29 17:30:30 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-09-29 17:30:30 | Review pass 3: I ran the repeatable project checks and they passed.

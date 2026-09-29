@@ -20,6 +20,7 @@ Core Engine\start_ui.bat              Engine-level UI helper launcher.
 Core Engine\review_3x.bat             Runs the three-pass project review.
 Logs\development log.md               Build notes.
 Logs\process Log.md                   Runtime/process notes.
+Storage\Appointment_YYYY-MM-DD.csv    Appointment records saved by the dashboard.
 
 Setup
 -----
@@ -96,6 +97,7 @@ Useful settings:
 - proxy.servers
   Auto rotator list. Add one proxy per line in the UI, or one string per item in JSON.
   The app selects a proxy from this list each time the assistant launches.
+  For two paid proxies, set proxy.mode to "rotating_list" and add both proxy endpoints.
 
 - proxy.username and proxy.password
   Fill these if your proxy provider needs authentication.
@@ -105,6 +107,12 @@ Useful settings:
 
 - proxy.rotation_strategy
   Use "round_robin" to step through the auto rotator list, or "random" to pick randomly.
+
+- browser.channel
+  Use "chromium", "chrome", or "msedge". Chrome or Edge must already be installed locally.
+
+- browser.manual_verification_pause
+  Leave this true so the assistant pauses when the page asks for CAPTCHA/security/human verification. Complete the check yourself in the visible browser, then press Enter in the assistant console.
 
 Run
 ---
@@ -150,6 +158,17 @@ Basic workflow
 7. The program checks the visible page text against your centre, keyword, and date settings.
 8. If it finds a possible match, it beeps and prints the matched text.
 9. Review and confirm any appointment action yourself in the browser.
+10. After you personally book or change an appointment, record it in the Appointment Dashboard.
+
+Appointment dashboard
+---------------------
+The dashboard stores manually recorded completed appointment work in:
+
+   Storage\Appointment_YYYY-MM-DD.csv
+
+The dashboard shows today's count, a remaining count toward 10 records, and the proxy note for the next browser session.
+
+The app cannot change a browser proxy mid-session. With Auto rotator list mode, each new assistant launch selects the next proxy, so close and relaunch the assistant between completed appointment sessions if you need the next proxy to be used.
 
 One-check test run
 ------------------
@@ -166,6 +185,8 @@ Runtime activity is written to:
 Development notes are kept in:
 
    Logs\development log.md
+
+These logs are file-only and are not displayed on the local UI screen.
 
 Development routine
 -------------------

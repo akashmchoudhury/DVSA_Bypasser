@@ -16,6 +16,7 @@ ALLOWED_SERVICE_HOSTS = {
 }
 
 PROXY_MODES = {"off", "local", "single", "provider_rotating", "rotating_list"}
+BROWSER_CHANNELS = {"chromium", "chrome", "msedge"}
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -65,10 +66,12 @@ def default_config() -> dict[str, Any]:
             "provider_managed_rotating_endpoint": True,
         },
         "browser": {
+            "channel": "chromium",
             "headless": False,
             "slow_mo_ms": 80,
             "user_data_dir": ".browser-profile",
             "click_start_now": True,
+            "manual_verification_pause": True,
             "navigation_timeout_ms": 45000,
         },
         "logging": {
@@ -132,10 +135,12 @@ class ProxyConfig:
 
 @dataclass(frozen=True)
 class BrowserConfig:
+    channel: str
     headless: bool
     slow_mo_ms: int
     user_data_dir: Path
     click_start_now: bool
+    manual_verification_pause: bool
     navigation_timeout_ms: int
 
 
@@ -264,6 +269,11 @@ def load_config(config_path: str | Path) -> AppConfig:
     rotation_state_path = _resolve_path(
         str(proxy.get("rotation_state_path", ".proxy-rotation-state.json")), path.parent
     )
+    browser_channel = str(browser.get("channel", "chromium")).strip() or "chromium"
+    if browser_channel not in BROWSER_CHANNELS:
+        raise ValueError(
+            f"browser.channel must be one of: {', '.join(sorted(BROWSER_CHANNELS))}"
+        )
 
     return AppConfig(
         candidate=CandidateConfig(
@@ -307,10 +317,14 @@ def load_config(config_path: str | Path) -> AppConfig:
             ),
         ),
         browser=BrowserConfig(
+            channel=browser_channel,
             headless=bool(browser["headless"]),
             slow_mo_ms=int(browser["slow_mo_ms"]),
             user_data_dir=user_data_dir,
             click_start_now=bool(browser["click_start_now"]),
+            manual_verification_pause=bool(
+                browser.get("manual_verification_pause", True)
+            ),
             navigation_timeout_ms=int(browser["navigation_timeout_ms"]),
         ),
         logging=LoggingConfig(process_log_path=process_log_path),

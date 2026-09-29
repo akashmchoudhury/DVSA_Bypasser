@@ -27,6 +27,21 @@ RATE_LIMIT_PATTERNS = [
     ]
 ]
 
+VERIFICATION_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"captcha",
+        r"security check",
+        r"verify you are human",
+        r"prove you are human",
+        r"checking your browser",
+        r"complete the security",
+        r"human verification",
+        r"are you a robot",
+        r"cloudflare",
+    ]
+]
+
 
 class AppointmentAssistant:
     def __init__(self, config: AppConfig, logger: MarkdownProcessLogger) -> None:
@@ -57,6 +72,9 @@ class AppointmentAssistant:
                 "slow_mo": self.config.browser.slow_mo_ms,
                 "timeout": self.config.browser.navigation_timeout_ms,
             }
+            if self.config.browser.channel != "chromium":
+                launch_options["channel"] = self.config.browser.channel
+                self.logger.append("browser selected", self.config.browser.channel)
             proxy, proxy_description = select_playwright_proxy(self.config.proxy)
             if proxy:
                 launch_options["proxy"] = proxy
@@ -166,6 +184,11 @@ class AppointmentAssistant:
 
             check_count += 1
             text, read_failed = await self._read_body_text(page)
+            verification_reason = self._detect_verification_text(text)
+            if verification_reason and self.config.browser.manual_verification_pause:
+                await self._pause_for_manual_verification(page, verification_reason)
+                continue
+
             rate_limit_reason = self._detect_rate_limit_text(text)
             if rate_limit_reason:
                 next_delay = rate_limiter.mark_rate_limited()
@@ -230,6 +253,26 @@ class AppointmentAssistant:
             if match:
                 return match.group(0)
         return ""
+
+    def _detect_verification_text(self, page_text: str) -> str:
+        for pattern in VERIFICATION_PATTERNS:
+            match = pattern.search(page_text)
+            if match:
+                return match.group(0)
+        return ""
+
+    async def _pause_for_manual_verification(self, page, reason: str) -> None:
+        self._alert_user()
+        self.logger.append("manual verification required", reason)
+        print()
+        print(f"Manual verification required: {reason}.")
+        print("Complete the verification in the open browser window.")
+        input("When the page is usable again, press Enter here to resume monitoring.")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=10000)
+        except Exception:
+            pass
+        self.logger.append("manual verification resumed", "user returned control")
 
     def _inside_service_hours(self) -> bool:
         uk_now = datetime.now(ZoneInfo("Europe/London"))
