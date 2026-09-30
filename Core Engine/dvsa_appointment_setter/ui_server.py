@@ -358,6 +358,16 @@ HTML = """<!doctype html>
       margin: 18px auto 0;
     }
 
+    .site-footer {
+      max-width: 1180px;
+      margin: 18px auto 0;
+      padding: 12px 4px 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
     .metrics {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -523,10 +533,37 @@ HTML = """<!doctype html>
             <label>Browser
               <select id="browserChannel">
                 <option value="chromium">Chromium</option>
-                <option value="chrome">Google Chrome</option>
+                <option value="chrome">Google Chrome (recommended)</option>
                 <option value="msedge">Microsoft Edge</option>
               </select>
-              <span class="hint">Chrome or Edge must already be installed on this computer</span>
+              <span class="hint">Google Chrome is best for Chrome Web Store extensions; Chrome or Edge must already be installed.</span>
+            </label>
+
+            <label>Browser start
+              <select id="browserStartupMode">
+                <option value="service_url">Open service URL</option>
+                <option value="manual">Manual search/navigation (recommended)</option>
+              </select>
+              <span class="hint">Manual mode waits while you browse to the DVSA page yourself</span>
+            </label>
+
+            <label class="full">Manual start URL
+              <input id="manualStartUrl" autocomplete="off">
+              <span class="hint">Used by manual mode. A search page is fine; monitoring starts only after you press Enter in the assistant console.</span>
+            </label>
+
+            <label class="full">Chrome Web Store URL
+              <input id="extensionStoreUrl" autocomplete="off">
+              <span class="hint">Open this before DVSA when you need to install or check an extension manually</span>
+            </label>
+
+            <div class="actions full">
+              <button class="btn secondary" id="openExtensionStoreBtn" type="button">Open Chrome Web Store</button>
+            </div>
+
+            <label class="full">Unpacked extension folders
+              <textarea id="extensionPaths" spellcheck="false" placeholder="C:\\Path\\To\\ExtensionFolder"></textarea>
+              <span class="hint">One folder per line. Each folder must contain manifest.json and loads through Chromium.</span>
             </label>
 
             <label>Proxy mode
@@ -576,6 +613,9 @@ HTML = """<!doctype html>
               <label class="check"><input id="serviceHours" type="checkbox"> Service hours only</label>
               <label class="check"><input id="clickStart" type="checkbox"> Click Start now</label>
               <label class="check"><input id="manualVerificationPause" type="checkbox"> Pause for manual verification</label>
+              <label class="check"><input id="openExtensionStoreOnLaunch" type="checkbox"> Open Chrome Web Store before DVSA</label>
+              <label class="check"><input id="enableInstalledExtensions" type="checkbox"> Allow installed extensions</label>
+              <label class="check"><input id="loadUnpackedExtensions" type="checkbox"> Load unpacked extensions</label>
             </div>
           </div>
 
@@ -675,6 +715,8 @@ HTML = """<!doctype html>
         </div>
       </div>
     </section>
+
+    <footer class="site-footer">Developed by Webmernix</footer>
   </main>
 
   <script>
@@ -693,6 +735,10 @@ HTML = """<!doctype html>
       testReference: document.querySelector("#testReference"),
       theoryNumber: document.querySelector("#theoryNumber"),
       browserChannel: document.querySelector("#browserChannel"),
+      browserStartupMode: document.querySelector("#browserStartupMode"),
+      manualStartUrl: document.querySelector("#manualStartUrl"),
+      extensionStoreUrl: document.querySelector("#extensionStoreUrl"),
+      extensionPaths: document.querySelector("#extensionPaths"),
       proxyMode: document.querySelector("#proxyMode"),
       localProxyServer: document.querySelector("#localProxyServer"),
       proxyServer: document.querySelector("#proxyServer"),
@@ -707,6 +753,9 @@ HTML = """<!doctype html>
       serviceHours: document.querySelector("#serviceHours"),
       clickStart: document.querySelector("#clickStart"),
       manualVerificationPause: document.querySelector("#manualVerificationPause"),
+      openExtensionStoreOnLaunch: document.querySelector("#openExtensionStoreOnLaunch"),
+      enableInstalledExtensions: document.querySelector("#enableInstalledExtensions"),
+      loadUnpackedExtensions: document.querySelector("#loadUnpackedExtensions"),
       appointmentAction: document.querySelector("#appointmentAction"),
       appointmentLearner: document.querySelector("#appointmentLearner"),
       appointmentLicenceLast4: document.querySelector("#appointmentLicenceLast4"),
@@ -729,6 +778,14 @@ HTML = """<!doctype html>
 
     function splitLines(value) {
       return value.split("\\n").map((item) => item.trim()).filter(Boolean);
+    }
+
+    function defaultExtensionStoreUrl() {
+      return "https://chromewebstore.google.com/";
+    }
+
+    function defaultManualStartUrl() {
+      return "https://www.google.com/search?q=DVSA+change+driving+test";
     }
 
     function showToast(message, type = "") {
@@ -769,6 +826,13 @@ HTML = """<!doctype html>
       proxyChip.classList.toggle("warn", mode === "off");
     }
 
+    function syncExtensionControls() {
+      const hasExtensionPaths = splitLines(fields.extensionPaths.value).length > 0;
+      if (fields.loadUnpackedExtensions.checked && hasExtensionPaths) {
+        fields.browserChannel.value = "chromium";
+      }
+    }
+
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme;
       localStorage.setItem("dvsa-theme", theme);
@@ -790,7 +854,11 @@ HTML = """<!doctype html>
       fields.licenceNumber.value = config.candidate.driving_licence_number || "";
       fields.testReference.value = config.candidate.driving_test_reference || "";
       fields.theoryNumber.value = config.candidate.theory_test_pass_number || "";
-      fields.browserChannel.value = config.browser.channel || "chromium";
+      fields.browserChannel.value = config.browser.channel || "chrome";
+      fields.browserStartupMode.value = config.browser.startup_mode || "manual";
+      fields.manualStartUrl.value = config.browser.manual_start_url || defaultManualStartUrl();
+      fields.extensionStoreUrl.value = config.browser.extension_store_url || defaultExtensionStoreUrl();
+      fields.extensionPaths.value = (config.browser.extension_paths || []).join("\\n");
       fields.proxyMode.value = proxyModeFromConfig(config);
       fields.localProxyServer.value = config.proxy.local_server || "http://127.0.0.1:8080";
       fields.proxyServer.value = config.proxy.server || "";
@@ -805,12 +873,20 @@ HTML = """<!doctype html>
       fields.serviceHours.checked = Boolean(config.search.service_hours_only);
       fields.clickStart.checked = Boolean(config.browser.click_start_now);
       fields.manualVerificationPause.checked = config.browser.manual_verification_pause !== false;
+      fields.openExtensionStoreOnLaunch.checked = Boolean(config.browser.open_extension_store_on_launch);
+      fields.enableInstalledExtensions.checked = Boolean(config.browser.enable_installed_extensions);
+      fields.loadUnpackedExtensions.checked = Boolean(config.browser.load_unpacked_extensions);
       configChip.textContent = source === "local" ? "Local config" : "Example config";
+      syncExtensionControls();
       updateProxyChip();
     }
 
     function collectForm() {
       const selectedProxyMode = fields.proxyEnabled.checked ? fields.proxyMode.value : "off";
+      const extensionPaths = splitLines(fields.extensionPaths.value);
+      if (fields.loadUnpackedExtensions.checked && extensionPaths.length) {
+        fields.browserChannel.value = "chromium";
+      }
       return {
         candidate: {
           driving_licence_number: fields.licenceNumber.value.trim(),
@@ -848,9 +924,16 @@ HTML = """<!doctype html>
         },
         browser: {
           channel: fields.browserChannel.value,
+          startup_mode: fields.browserStartupMode.value,
           headless: false,
           slow_mo_ms: 80,
           user_data_dir: ".browser-profile",
+          manual_start_url: fields.manualStartUrl.value.trim() || defaultManualStartUrl(),
+          extension_store_url: fields.extensionStoreUrl.value.trim() || defaultExtensionStoreUrl(),
+          open_extension_store_on_launch: fields.openExtensionStoreOnLaunch.checked,
+          enable_installed_extensions: fields.enableInstalledExtensions.checked,
+          load_unpacked_extensions: fields.loadUnpackedExtensions.checked,
+          extension_paths: extensionPaths,
           click_start_now: fields.clickStart.checked,
           manual_verification_pause: fields.manualVerificationPause.checked,
           navigation_timeout_ms: 45000
@@ -955,6 +1038,11 @@ HTML = """<!doctype html>
       try { await loadConfig(); } catch (error) { showToast(error.message, "bad"); }
     });
 
+    document.querySelector("#openExtensionStoreBtn").addEventListener("click", () => {
+      const url = fields.extensionStoreUrl.value.trim() || defaultExtensionStoreUrl();
+      window.open(url, "_blank", "noopener");
+    });
+
     document.querySelector("#launchBtn").addEventListener("click", async () => {
       try { await saveConfig(); await launchAssistant(); } catch (error) { showToast(error.message, "bad"); }
     });
@@ -984,6 +1072,8 @@ HTML = """<!doctype html>
       fields.rotatingProxy.checked = fields.proxyMode.value === "provider_rotating";
       updateProxyChip();
     });
+    fields.loadUnpackedExtensions.addEventListener("change", syncExtensionControls);
+    fields.extensionPaths.addEventListener("input", syncExtensionControls);
 
     setTheme(localStorage.getItem("dvsa-theme") || "day");
     loadConfig().then(loadAppointments).catch((error) => showToast(error.message, "bad"));
@@ -1226,12 +1316,38 @@ def build_config_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
             ),
         }
     )
+    extension_paths = clean_string_list(browser.get("extension_paths", []))
+    load_unpacked_extensions = bool(browser.get("load_unpacked_extensions", False))
+    browser_channel = clean_string(browser.get("channel", "chrome")) or "chrome"
+    if load_unpacked_extensions and extension_paths:
+        browser_channel = "chromium"
+    browser_startup_mode = clean_string(browser.get("startup_mode", "manual")) or "manual"
+    manual_start_url = clean_string(
+        browser.get(
+            "manual_start_url",
+            "https://www.google.com/search?q=DVSA+change+driving+test",
+        )
+    ) or "https://www.google.com/search?q=DVSA+change+driving+test"
     config["browser"].update(
         {
-            "channel": clean_string(browser.get("channel", "chromium")) or "chromium",
+            "channel": browser_channel,
+            "startup_mode": browser_startup_mode,
             "headless": False,
             "slow_mo_ms": int(browser.get("slow_mo_ms", 80)),
             "user_data_dir": ".browser-profile",
+            "manual_start_url": manual_start_url,
+            "extension_store_url": clean_string(
+                browser.get("extension_store_url", "https://chromewebstore.google.com/")
+            )
+            or "https://chromewebstore.google.com/",
+            "open_extension_store_on_launch": bool(
+                browser.get("open_extension_store_on_launch", False)
+            ),
+            "enable_installed_extensions": bool(
+                browser.get("enable_installed_extensions", True)
+            ),
+            "load_unpacked_extensions": load_unpacked_extensions,
+            "extension_paths": extension_paths,
             "click_start_now": bool(browser.get("click_start_now", True)),
             "manual_verification_pause": bool(
                 browser.get("manual_verification_pause", True)

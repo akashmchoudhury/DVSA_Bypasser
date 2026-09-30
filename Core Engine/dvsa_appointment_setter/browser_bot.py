@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import re
 from datetime import datetime
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
-from .config import AppConfig
+from .config import ALLOWED_SERVICE_HOSTS, AppConfig
 from .logger import MarkdownProcessLogger
 from .matcher import AvailabilityMatcher
 from .proxy_manager import select_playwright_proxy
@@ -75,6 +76,23 @@ class AppointmentAssistant:
             if self.config.browser.channel != "chromium":
                 launch_options["channel"] = self.config.browser.channel
                 self.logger.append("browser selected", self.config.browser.channel)
+            if self.config.browser.enable_installed_extensions:
+                launch_options["ignore_default_args"] = ["--disable-extensions"]
+                self.logger.append(
+                    "browser extensions enabled",
+                    "installed profile extensions are allowed",
+                )
+            extension_paths = self._enabled_extension_paths()
+            if extension_paths:
+                extension_arg = ",".join(str(path) for path in extension_paths)
+                launch_options["args"] = [
+                    f"--disable-extensions-except={extension_arg}",
+                    f"--load-extension={extension_arg}",
+                ]
+                self.logger.append(
+                    "browser extensions enabled",
+                    f"{len(extension_paths)} unpacked extension folder(s) loaded",
+                )
             proxy, proxy_description = select_playwright_proxy(self.config.proxy)
             if proxy:
                 launch_options["proxy"] = proxy
@@ -88,19 +106,25 @@ class AppointmentAssistant:
             page.set_default_timeout(self.config.browser.navigation_timeout_ms)
 
             try:
-                await page.goto(self.config.search.start_url, wait_until="domcontentloaded")
-                self.logger.append("opened start page", self.config.search.start_url)
+                if self.config.browser.open_extension_store_on_launch:
+                    await self._prepare_extension_store(page)
 
-                if self.config.browser.click_start_now:
-                    await self._click_start_now(page, PlaywrightTimeoutError)
+                if self.config.browser.startup_mode == "manual":
+                    await self._prepare_manual_browsing(page)
+                else:
+                    await page.goto(
+                        self.config.search.start_url,
+                        wait_until="domcontentloaded",
+                    )
+                    self.logger.append("opened start page", self.config.search.start_url)
 
-                if self.config.candidate.autofill_known_fields:
-                    await self._autofill_known_fields(page)
+                    if self.config.browser.click_start_now:
+                        await self._click_start_now(page, PlaywrightTimeoutError)
 
-                print()
-                print("The browser is open. Complete any DVSA security and navigation steps.")
-                print("Go to the page where appointment results or slots are visible.")
-                input("Press Enter here when that page is ready, then monitoring will start.")
+                    if self.config.candidate.autofill_known_fields:
+                        await self._autofill_known_fields(page)
+
+                    await self._wait_for_monitoring_page(page)
 
                 await self._monitor(page, once=once)
             finally:
@@ -117,6 +141,62 @@ class AppointmentAssistant:
             self.logger.append("start now not clicked", "link not found before timeout")
         except Exception as exc:
             self.logger.append("start now not clicked", str(exc))
+
+    def _enabled_extension_paths(self):
+        if not self.config.browser.load_unpacked_extensions:
+            return []
+        return self.config.browser.extension_paths
+
+    async def _prepare_extension_store(self, page) -> None:
+        print()
+        print("Opening the Chrome Web Store extension setup page.")
+        print("Install or check the browser extension yourself, then return here.")
+        print("Do not use extensions to bypass DVSA security or human verification.")
+        await page.goto(
+            self.config.browser.extension_store_url,
+            wait_until="domcontentloaded",
+        )
+        self.logger.append(
+            "opened chrome web store",
+            self.config.browser.extension_store_url,
+        )
+        input("Press Enter here when extension setup is done, then browsing will continue.")
+
+    async def _prepare_manual_browsing(self, page) -> None:
+        await page.goto(
+            self.config.browser.manual_start_url,
+            wait_until="domcontentloaded",
+        )
+        self.logger.append(
+            "opened manual browser start",
+            self.config.browser.manual_start_url,
+        )
+        print()
+        print("Manual browser mode is open.")
+        print("Search or navigate to the DVSA appointment/results page yourself.")
+        print("Install or use browser extensions manually if needed.")
+        await self._wait_for_monitoring_page(page)
+
+    async def _wait_for_monitoring_page(self, page) -> None:
+        allowed = ", ".join(sorted(ALLOWED_SERVICE_HOSTS))
+        while True:
+            print()
+            print("Complete any DVSA security and navigation steps in the open browser.")
+            print("Go to the page where appointment results or slots are visible.")
+            input("Press Enter here when that page is ready, then monitoring will start.")
+            current_url = page.url
+            if self._is_allowed_service_page(current_url):
+                self.logger.append("monitoring page ready", current_url)
+                return
+            print()
+            print(f"The current page is not on the official GOV.UK/DVSA hosts: {allowed}.")
+            print(f"Current page: {current_url}")
+            print("Navigate to the official DVSA page, then try again.")
+            self.logger.append("monitoring page rejected", current_url)
+
+    def _is_allowed_service_page(self, url: str) -> bool:
+        parsed = urlparse(url)
+        return parsed.scheme == "https" and parsed.hostname in ALLOWED_SERVICE_HOSTS
 
     async def _autofill_known_fields(self, page) -> None:
         fields = [

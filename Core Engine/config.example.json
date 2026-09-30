@@ -39,10 +39,17 @@
     "provider_managed_rotating_endpoint": true
   },
   "browser": {
-    "channel": "chromium",
+    "channel": "chrome",
+    "startup_mode": "manual",
     "headless": false,
     "slow_mo_ms": 80,
     "user_data_dir": ".browser-profile",
+    "manual_start_url": "https://www.google.com/search?q=DVSA+change+driving+test",
+    "extension_store_url": "https://chromewebstore.google.com/",
+    "open_extension_store_on_launch": false,
+    "enable_installed_extensions": true,
+    "load_unpacked_extensions": false,
+    "extension_paths": [],
     "click_start_now": true,
     "manual_verification_pause": true,
     "navigation_timeout_ms": 45000

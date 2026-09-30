@@ -15,8 +15,14 @@ ALLOWED_SERVICE_HOSTS = {
     "driverpracticaltest.dvsa.gov.uk",
 }
 
+ALLOWED_EXTENSION_STORE_HOSTS = {
+    "chrome.google.com",
+    "chromewebstore.google.com",
+}
+
 PROXY_MODES = {"off", "local", "single", "provider_rotating", "rotating_list"}
 BROWSER_CHANNELS = {"chromium", "chrome", "msedge"}
+BROWSER_STARTUP_MODES = {"service_url", "manual"}
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -66,10 +72,17 @@ def default_config() -> dict[str, Any]:
             "provider_managed_rotating_endpoint": True,
         },
         "browser": {
-            "channel": "chromium",
+            "channel": "chrome",
+            "startup_mode": "manual",
             "headless": False,
             "slow_mo_ms": 80,
             "user_data_dir": ".browser-profile",
+            "manual_start_url": "https://www.google.com/search?q=DVSA+change+driving+test",
+            "extension_store_url": "https://chromewebstore.google.com/",
+            "open_extension_store_on_launch": False,
+            "enable_installed_extensions": True,
+            "load_unpacked_extensions": False,
+            "extension_paths": [],
             "click_start_now": True,
             "manual_verification_pause": True,
             "navigation_timeout_ms": 45000,
@@ -136,9 +149,16 @@ class ProxyConfig:
 @dataclass(frozen=True)
 class BrowserConfig:
     channel: str
+    startup_mode: str
     headless: bool
     slow_mo_ms: int
     user_data_dir: Path
+    manual_start_url: str
+    extension_store_url: str
+    open_extension_store_on_launch: bool
+    enable_installed_extensions: bool
+    load_unpacked_extensions: bool
+    extension_paths: list[Path]
     click_start_now: bool
     manual_verification_pause: bool
     navigation_timeout_ms: int
@@ -193,6 +213,21 @@ def validate_start_url(url: str) -> None:
     if parsed.scheme != "https" or parsed.hostname not in ALLOWED_SERVICE_HOSTS:
         allowed = ", ".join(sorted(ALLOWED_SERVICE_HOSTS))
         raise ValueError(f"start_url must be an HTTPS URL on one of: {allowed}")
+
+
+def validate_extension_store_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_EXTENSION_STORE_HOSTS:
+        allowed = ", ".join(sorted(ALLOWED_EXTENSION_STORE_HOSTS))
+        raise ValueError(
+            f"browser.extension_store_url must be an HTTPS URL on one of: {allowed}"
+        )
+
+
+def validate_manual_start_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("browser.manual_start_url must be a valid HTTPS URL")
 
 
 def load_config(config_path: str | Path) -> AppConfig:
@@ -269,11 +304,51 @@ def load_config(config_path: str | Path) -> AppConfig:
     rotation_state_path = _resolve_path(
         str(proxy.get("rotation_state_path", ".proxy-rotation-state.json")), path.parent
     )
-    browser_channel = str(browser.get("channel", "chromium")).strip() or "chromium"
+    browser_channel = str(browser.get("channel", "chrome")).strip() or "chrome"
     if browser_channel not in BROWSER_CHANNELS:
         raise ValueError(
             f"browser.channel must be one of: {', '.join(sorted(BROWSER_CHANNELS))}"
         )
+    browser_startup_mode = str(browser.get("startup_mode", "manual")).strip() or "manual"
+    if browser_startup_mode not in BROWSER_STARTUP_MODES:
+        raise ValueError(
+            f"browser.startup_mode must be one of: {', '.join(sorted(BROWSER_STARTUP_MODES))}"
+        )
+    manual_start_url = (
+        str(
+            browser.get(
+                "manual_start_url",
+                "https://www.google.com/search?q=DVSA+change+driving+test",
+            )
+        ).strip()
+        or "https://www.google.com/search?q=DVSA+change+driving+test"
+    )
+    validate_manual_start_url(manual_start_url)
+    extension_store_url = (
+        str(browser.get("extension_store_url", "https://chromewebstore.google.com/")).strip()
+        or "https://chromewebstore.google.com/"
+    )
+    validate_extension_store_url(extension_store_url)
+
+    load_unpacked_extensions = bool(browser.get("load_unpacked_extensions", False))
+    extension_paths = [
+        _resolve_path(item, path.parent)
+        for item in _require_string_list(
+            browser.get("extension_paths", []), "browser.extension_paths"
+        )
+    ]
+    if load_unpacked_extensions and extension_paths and browser_channel != "chromium":
+        raise ValueError(
+            "browser.load_unpacked_extensions requires browser.channel to be chromium"
+        )
+    if load_unpacked_extensions:
+        for extension_path in extension_paths:
+            if not extension_path.is_dir():
+                raise ValueError(f"browser extension folder not found: {extension_path}")
+            if not (extension_path / "manifest.json").is_file():
+                raise ValueError(
+                    f"browser extension folder must contain manifest.json: {extension_path}"
+                )
 
     return AppConfig(
         candidate=CandidateConfig(
@@ -318,9 +393,20 @@ def load_config(config_path: str | Path) -> AppConfig:
         ),
         browser=BrowserConfig(
             channel=browser_channel,
+            startup_mode=browser_startup_mode,
             headless=bool(browser["headless"]),
             slow_mo_ms=int(browser["slow_mo_ms"]),
             user_data_dir=user_data_dir,
+            manual_start_url=manual_start_url,
+            extension_store_url=extension_store_url,
+            open_extension_store_on_launch=bool(
+                browser.get("open_extension_store_on_launch", False)
+            ),
+            enable_installed_extensions=bool(
+                browser.get("enable_installed_extensions", False)
+            ),
+            load_unpacked_extensions=load_unpacked_extensions,
+            extension_paths=extension_paths,
             click_start_now=bool(browser["click_start_now"]),
             manual_verification_pause=bool(
                 browser.get("manual_verification_pause", True)

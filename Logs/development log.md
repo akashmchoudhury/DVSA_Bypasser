@@ -37,3 +37,16 @@
 - 2026-09-29 17:30:30 | Review pass 1: I ran the repeatable project checks and they passed.
 - 2026-09-29 17:30:30 | Review pass 2: I ran the repeatable project checks and they passed.
 - 2026-09-29 17:30:30 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:47 | I checked the instruction file first, then added Chrome Web Store preparation and unpacked extension loading options to the browser settings.
+- 2026-10-01 01:48:07 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:48:07 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:48:07 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:53 | I checked the instruction file first, then added manual browser startup so I can search or navigate to DVSA myself before monitoring starts.
+- 2026-10-01 01:54:07 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:54:07 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:54:07 | Review pass 3: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:56 | I kept the best browser approach from the idea list: Chrome manual mode with installed extensions allowed, while leaving advanced unpacked extensions available.
+- 2026-10-01 01:58 | I added the Webmernix credit footer to the control panel.
+- 2026-10-01 01:56:58 | Review pass 1: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:56:58 | Review pass 2: I ran the repeatable project checks and they passed.
+- 2026-10-01 01:56:58 | Review pass 3: I ran the repeatable project checks and they passed.

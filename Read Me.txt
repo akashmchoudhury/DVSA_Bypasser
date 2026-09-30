@@ -109,7 +109,29 @@ Useful settings:
   Use "round_robin" to step through the auto rotator list, or "random" to pick randomly.
 
 - browser.channel
-  Use "chromium", "chrome", or "msedge". Chrome or Edge must already be installed locally.
+  Recommended: "chrome" for Chrome Web Store extensions and manual browsing. You can also use "chromium" or "msedge". Chrome or Edge must already be installed locally when selected.
+
+- browser.startup_mode
+  Recommended: "manual". It opens a search/start page first, then waits while you browse to DVSA yourself. Use "service_url" only when you want the older automatic GOV.UK start.
+
+- browser.manual_start_url
+  The page opened in manual mode. The default is a Google search for DVSA change driving test. You can replace it with another HTTPS search page or a direct official URL.
+
+- browser.extension_store_url
+  Chrome Web Store page to open when preparing extensions. Use the main store page or a specific extension page, for example:
+  https://chromewebstore.google.com/
+
+- browser.open_extension_store_on_launch
+  Set this to true if you want the assistant browser to open the Chrome Web Store first. Install or check the extension manually, then press Enter in the assistant console and browsing will continue.
+
+- browser.enable_installed_extensions
+  Recommended: true. This allows extensions already installed in the assistant browser profile to run. This is the closest mode to a normal Chrome browser session. Extension behavior still depends on the extension, browser channel, and Chrome Web Store support.
+
+- browser.load_unpacked_extensions
+  Set this to true to load unpacked extension folders at browser startup. This uses Playwright Chromium and expects each folder to contain a manifest.json file.
+
+- browser.extension_paths
+  Add one unpacked extension folder path per item in JSON, or one per line in the UI. When this is enabled, use the Chromium browser option. Do not use extensions to bypass DVSA security checks or human verification.
 
 - browser.manual_verification_pause
   Leave this true so the assistant pauses when the page asks for CAPTCHA/security/human verification. Complete the check yourself in the visible browser, then press Enter in the assistant console.
@@ -150,15 +172,28 @@ Or double-click:
 Basic workflow
 --------------
 1. Start the program.
-2. A Chromium browser opens on the GOV.UK page.
-3. If the Start now link is found, the program clicks it.
-4. Complete any DVSA security or login steps yourself.
-5. Navigate to the page where appointment slots or result text is visible.
-6. Return to PowerShell and press Enter.
-7. The program checks the visible page text against your centre, keyword, and date settings.
-8. If it finds a possible match, it beeps and prints the matched text.
-9. Review and confirm any appointment action yourself in the browser.
-10. After you personally book or change an appointment, record it in the Appointment Dashboard.
+2. A Chrome browser opens to the manual start/search page.
+3. Search for DVSA or open the official GOV.UK/DVSA service yourself.
+4. Install, open, or use Chrome extensions manually if needed.
+5. Complete any DVSA security or login steps yourself.
+6. Navigate to the page where appointment slots or result text is visible.
+7. Return to PowerShell and press Enter.
+8. The program checks the visible page text against your centre, keyword, and date settings.
+9. If it finds a possible match, it beeps and prints the matched text.
+10. Review and confirm any appointment action yourself in the browser.
+11. After you personally book or change an appointment, record it in the Appointment Dashboard.
+
+Manual browser workflow
+-----------------------
+Use this when you want to search for DVSA manually or prepare browser extensions before monitoring.
+
+1. In the UI, set Browser to Google Chrome and Browser start to Manual search/navigation.
+2. Keep Allow installed extensions ticked.
+3. Optional: tick Open Chrome Web Store before DVSA if you want to install or check extensions first.
+4. Launch the assistant.
+5. Use the browser normally: search the web, open the official GOV.UK/DVSA service, sign in, and complete any security checks yourself.
+6. Go to the appointment/results page where slots are visible.
+7. Return to the assistant console and press Enter. The app starts monitoring from the page currently open in the browser.
 
 Appointment dashboard
 ---------------------

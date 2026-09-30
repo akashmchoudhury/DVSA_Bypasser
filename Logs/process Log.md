@@ -38,3 +38,15 @@
 - 2026-09-29 17:30:30 | review pass 1 | repeatable project checks passed
 - 2026-09-29 17:30:30 | review pass 2 | repeatable project checks passed
 - 2026-09-29 17:30:30 | review pass 3 | repeatable project checks passed
+- 2026-10-01 01:47 | browser update | I added Chrome Web Store preparation plus Chromium unpacked extension loading.
+- 2026-10-01 01:48:07 | review pass 1 | repeatable project checks passed
+- 2026-10-01 01:48:07 | review pass 2 | repeatable project checks passed
+- 2026-10-01 01:48:07 | review pass 3 | repeatable project checks passed
+- 2026-10-01 01:53 | browser update | I added manual browser startup and installed-extension support for the assistant profile.
+- 2026-10-01 01:54:07 | review pass 1 | repeatable project checks passed
+- 2026-10-01 01:54:07 | review pass 2 | repeatable project checks passed
+- 2026-10-01 01:54:07 | review pass 3 | repeatable project checks passed
+- 2026-10-01 01:56 | browser update | I made Chrome manual mode with installed extensions the recommended default path.
+- 2026-10-01 01:56:58 | review pass 1 | repeatable project checks passed
+- 2026-10-01 01:56:58 | review pass 2 | repeatable project checks passed
+- 2026-10-01 01:56:58 | review pass 3 | repeatable project checks passed

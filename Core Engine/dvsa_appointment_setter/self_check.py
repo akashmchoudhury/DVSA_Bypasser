@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import compileall
+import json
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from .config import CORE_ROOT, SOFTWARE_ROOT, load_config
+from .config import CORE_ROOT, SOFTWARE_ROOT, default_config, load_config
 from .appointment_store import normalize_record
 from .browser_bot import AppointmentAssistant
 from .logger import MarkdownProcessLogger
@@ -36,6 +38,7 @@ def run_three_pass_review() -> int:
         check_root_launcher,
         check_python_sources,
         check_config_loading,
+        check_browser_extension_config,
         check_matcher,
         check_appointment_store,
         check_rate_limiter,
@@ -99,6 +102,39 @@ def check_config_loading(_: str) -> None:
         raise CheckFailed("poll_seconds must stay at 60 or higher")
     if not config.search.start_url.startswith("https://"):
         raise CheckFailed("start_url must stay on HTTPS")
+
+
+def check_browser_extension_config(_: str) -> None:
+    with tempfile.TemporaryDirectory(dir=CORE_ROOT) as temp_dir:
+        temp_path = Path(temp_dir)
+        extension_path = temp_path / "sample-extension"
+        extension_path.mkdir()
+        (extension_path / "manifest.json").write_text(
+            '{"manifest_version": 3, "name": "Sample", "version": "1.0"}',
+            encoding="utf-8",
+        )
+        config_data = default_config()
+        config_data["browser"].update(
+            {
+                "channel": "chromium",
+                "startup_mode": "manual",
+                "manual_start_url": "https://www.google.com/search?q=DVSA+driving+test",
+                "enable_installed_extensions": True,
+                "load_unpacked_extensions": True,
+                "extension_paths": [str(extension_path)],
+            }
+        )
+        config_path = temp_path / "config.json"
+        config_path.write_text(json.dumps(config_data), encoding="utf-8")
+        config = load_config(config_path)
+        if not config.browser.load_unpacked_extensions:
+            raise CheckFailed("browser extension loading did not stay enabled")
+        if config.browser.extension_paths != [extension_path.resolve()]:
+            raise CheckFailed("browser extension path was not resolved correctly")
+        if config.browser.startup_mode != "manual":
+            raise CheckFailed("manual browser startup mode did not load")
+        if not config.browser.enable_installed_extensions:
+            raise CheckFailed("installed browser extension support did not stay enabled")
 
 
 def check_matcher(_: str) -> None:
@@ -181,8 +217,14 @@ def check_ui_markup(_: str) -> None:
         "Rate limit cooldown seconds",
         "Appointment Dashboard",
         "Record Appointment",
+        "Developed by Webmernix",
         "Google Chrome",
         "Microsoft Edge",
+        "Manual search/navigation",
+        "Chrome Web Store",
+        "Unpacked extension folders",
+        "Allow installed extensions",
+        "Load unpacked extensions",
         "Pause for manual verification",
         "--coffee",
         "--bg",
